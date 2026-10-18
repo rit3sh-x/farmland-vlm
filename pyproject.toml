@@ -7,6 +7,7 @@ dependencies = ["numpy>=1.26", "pillow>=10", "scikit-learn>=1.4"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+colab = ["pycocoevalcap>=1.2", "peft>=0.21"]
 
 [build-system]
 requires = ["setuptools>=68"]

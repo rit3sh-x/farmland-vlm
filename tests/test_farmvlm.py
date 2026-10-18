@@ -187,3 +187,16 @@ def test_caption_facts_and_calibration():
     assert ece(np.full(4, 0.5), np.array([1, 0, 1, 0], float)) == pytest.approx(0.0)
     m, lo, hi = grouped_bootstrap(np.array([1, 1, 0, 0.]), np.array(["a", "a", "b", "b"]))
     assert m == 0.5 and lo <= m <= hi
+
+
+def test_eval_items_cover_every_family():
+    from farmvlm.evalset import eval_items
+    from farmvlm.folds import clean_views
+    t = synthetic_table()
+    tiles = np.arange(10)
+    clean = clean_views(t, tiles, seed=0, n=5)
+    items = eval_items(t, tiles, clean)
+    full_rows = np.flatnonzero(np.isin(t.row_tile, tiles) & (t.row_view == 0))
+    expect = sum(N_CLASSES + 2 + 2 * int((t.area[r] > 0).sum()) for r in full_rows) + len(clean) * (N_CLASSES + 2)
+    assert len(items) == expect
+    assert {i.answer for i in items if i.family == "identify" and i.row in set(clean)} == {"none"}

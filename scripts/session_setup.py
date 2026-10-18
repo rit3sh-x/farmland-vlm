@@ -26,7 +26,7 @@ def main():
     sh("git", "-C", CODE, "fetch", "-q", "origin")
     sh("git", "-C", CODE, "checkout", "-q", a.commit if a.commit != "main" else "origin/main")
     sh(sys.executable, "-m", "pip", "uninstall", "-y", "-q", "torchao")
-    sh(sys.executable, "-m", "pip", "install", "-q", "-e", CODE)
+    sh(sys.executable, "-m", "pip", "install", "-q", "-e", f"{CODE}[colab]")
     if a.no_data:
         return
     sh(sys.executable, CODE / "scripts" / "fetch_data.py", DATA)
