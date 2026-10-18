@@ -83,9 +83,10 @@ class StatsTable:
         return len(self.row_tile)
 
 
-def read_manifest(path):
+def read_manifest(path) -> dict[str, tuple[str, int]]:
+    """flight code -> (field, year). The official CSV stores numbers as floats ("2018.0")."""
     with open(path, newline="") as f:
-        return {r["flightcode"]: r for r in csv.DictReader(f)}
+        return {r["flightcode"]: (r["field"].removesuffix(".0"), int(float(r["year"]))) for r in csv.DictReader(f)}
 
 
 def _empty_sizes(root: Path, split: str, sample: int = 40):
@@ -128,8 +129,8 @@ def build(root: Path, manifest: dict, splits=("train", "val"), workers=None) -> 
     rows = {k: [] for k in ("row_tile", "row_view", "valid_px", "area", "cells")}
     with Pool(workers or os.cpu_count()) as pool:
         for ti, ((split, stem), views) in enumerate(zip(jobs, pool.imap(_tile_job, jobs, chunksize=64))):
-            m = manifest[stem.split("_")[0]]
-            tiles.append(stem); tsplit.append(split); tfield.append(m["field"]); tyear.append(int(m["year"]))
+            field, year = manifest[stem.split("_")[0]]
+            tiles.append(stem); tsplit.append(split); tfield.append(field); tyear.append(year)
             for vi, n, area, cells in views:
                 rows["row_tile"].append(ti); rows["row_view"].append(vi); rows["valid_px"].append(n)
                 rows["area"].append(area); rows["cells"].append(cells)
