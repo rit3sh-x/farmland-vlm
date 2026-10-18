@@ -200,3 +200,24 @@ def test_eval_items_cover_every_family():
     expect = sum(N_CLASSES + 2 + 2 * int((t.area[r] > 0).sum()) for r in full_rows) + len(clean) * (N_CLASSES + 2)
     assert len(items) == expect
     assert {i.answer for i in items if i.family == "identify" and i.row in set(clean)} == {"none"}
+
+
+@pytest.mark.parametrize("kind,np_op", [("hflip", np.fliplr), ("rot90", np.rot90)])
+def test_geometric_remap_matches_the_pixels(kind, np_op):
+    from farmvlm.perturb import remap_loc
+    from farmvlm.scheme import CELLS
+    for r0, c0 in [(0, 0), (0, 2), (1, 0), (2, 1)]:
+        m = np.zeros((300, 300), bool)
+        m[r0 * 100:(r0 + 1) * 100, c0 * 100:(c0 + 1) * 100] = True
+        before = CELLS[int(np.argmax(grid_shares(m)))]
+        after = CELLS[int(np.argmax(grid_shares(np_op(m))))]
+        assert remap_loc(before, kind) == after
+    assert remap_loc("top left or top", "hflip") == "top right or top"
+
+
+def test_photometric_variants_keep_size():
+    from PIL import Image
+    from farmvlm.perturb import apply, variants
+    img = Image.fromarray(np.random.default_rng(0).integers(0, 255, (384, 384, 3), dtype=np.uint8))
+    for kind, s in variants():
+        assert apply(img, kind, s).size == (384, 384), kind
