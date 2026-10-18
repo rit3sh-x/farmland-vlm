@@ -20,7 +20,7 @@ export const MODELS = [
 ]
 
 export const NDVI_RAMP = [[165, 0, 38], [244, 109, 67], [254, 224, 139], [166, 217, 106], [26, 152, 80]]
-export function ndviColor(v, lo = -0.2, hi = 0.8) {
+export function ndviColor(v, lo = -0.2, hi = 0.9) {
   const x = Math.max(0, Math.min(1, (v - lo) / (hi - lo))) * (NDVI_RAMP.length - 1)
   const i = Math.min(Math.floor(x), NDVI_RAMP.length - 2)
   const t = x - i

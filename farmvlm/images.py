@@ -11,7 +11,7 @@ from PIL import Image
 from farmvlm.scheme import VIEW_SLICES, VIEWS
 
 SIZE = 384
-NDVI_RANGE = (-0.2, 0.8)  # week 1: set from the measured NDVI distribution of the tiles
+NDVI_RANGE = (-0.35, 0.5)  # week 1: 5th-95th percentile of tile NDVI (uncalibrated JPEG bands; median ~0)
 RAMP = np.array([[165, 0, 38], [244, 109, 67], [254, 224, 139], [166, 217, 106], [26, 152, 80]], np.float32)
 
 

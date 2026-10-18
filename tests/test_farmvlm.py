@@ -28,20 +28,20 @@ def test_view_rows_quadrants_and_invalid_pixels():
     assert rows["full"][1][DRY] == pytest.approx(256 * 256 / (512 * 512 - 256 * 256))
     assert rows["q_tl"][1][DRY] == pytest.approx(1.0)
     assert rows["q_tr"][1].sum() == 0
-    assert location_of(rows["full"][2][DRY]) == "top left or throughout"
+    assert location_of(rows["full"][2][DRY]) == "top left"
     assert location_of(rows["full"][2][WEED]) == "top left"
     assert location_of(rows["q_tl"][2][DRY]) == "throughout"
 
 
 @pytest.mark.parametrize("area,word", [(0.01, "small"), (0.05, "small to moderate"), (0.12, "moderate"),
-                                        (0.30, "moderate to large"), (0.5, "large")])
+                                        (0.27, "moderate to large"), (0.5, "large")])
 def test_extent_bins_and_borderline(area, word):
     assert extent_of(area, cuts=(0.05, 0.25)) == word
 
 
 def test_location_ties():
     s = np.zeros(9)
-    s[[2, 5]] = [0.48, 0.42]
+    s[[2, 5]] = [0.46, 0.43]
     assert location_of(s) == "top right or right"
     s = np.zeros(9)
     s[4] = 0.41

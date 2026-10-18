@@ -41,12 +41,12 @@ MIN_VALID_SHARE = 0.5  # a view needs this share of in-field pixels to be used
 CELLS = ("top left", "top", "top right", "left", "centre", "right", "bottom left", "bottom", "bottom right")
 THROUGHOUT = "throughout"
 THROUGHOUT_CUT = 0.4  # no cell holds this share of the mask -> "throughout"
-LOCATION_TIE_MARGIN = 0.10  # top cell beats runner-up by less than this -> "A or B"
-THROUGHOUT_MARGIN = 0.05  # top share within this of THROUGHOUT_CUT -> "A or throughout"
+LOCATION_TIE_MARGIN = 0.05  # top cell beats runner-up by less than this -> "A or B" (week 1: ~10% of findings)
+THROUGHOUT_MARGIN = 0.025  # top share within this of THROUGHOUT_CUT -> "A or throughout"
 
 EXTENTS = ("small", "moderate", "large")
-EXTENT_CUTS = (0.05, 0.25)  # week 1: replace with rounded tertiles of the measured area distribution
-EXTENT_MARGIN = 0.25  # relative distance to a cut that counts as borderline
+EXTENT_CUTS = (0.10, 0.35)  # week 1: rounded tertiles (0.109, 0.374) of present-class area over 72,661 full views
+EXTENT_MARGIN = 0.12  # relative distance to a cut that counts as borderline (week 1: ~12% of findings)
 TINY_AREA = 0.01  # present but under this share of the field -> "possibly"
 
 POSSIBLY = "possibly"

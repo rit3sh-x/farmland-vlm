@@ -14,8 +14,6 @@ import json
 import httpx
 import numpy as np
 
-from farmvlm.images import NDVI_RANGE
-
 from . import config
 
 PC = "https://planetarycomputer.microsoft.com/api"
@@ -24,6 +22,7 @@ CMR = "https://cmr.earthdata.nasa.gov/search/granules.json"
 POWER = "https://power.larc.nasa.gov/api/temporal"
 HLS_S30 = "C2021957295-LPCLOUD"
 EXPR = "(B08-B04)/(B08+B04)"
+SAT_NDVI_RANGE = (-0.2, 0.9)  # calibrated surface reflectance, unlike the tiles' relative NDVI
 PARTS = ("north-west", "north", "north-east", "west", "centre", "east", "south-west", "south", "south-east")
 MONTHS = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
 
@@ -57,7 +56,7 @@ async def scene(c: httpx.AsyncClient, bbox, key: str) -> dict:
     box = ",".join(map(str, bbox))
     q = {"collection": "sentinel-2-l2a", "item": item["id"], "expression": EXPR, "asset_as_band": "true"}
     png = (await c.get(f"{PC}/data/v1/item/bbox/{box}/256x256.png",
-                       params={**q, "rescale": f"{NDVI_RANGE[0]},{NDVI_RANGE[1]}", "colormap_name": "rdylgn"})).raise_for_status()
+                       params={**q, "rescale": f"{SAT_NDVI_RANGE[0]},{SAT_NDVI_RANGE[1]}", "colormap_name": "rdylgn"})).raise_for_status()
     (config.FIELD_CACHE / f"{key}.png").write_bytes(png.content)
     grid = np.load(io.BytesIO((await c.get(f"{PC}/data/v1/item/bbox/{box}/60x60.npy", params=q)).raise_for_status().content))
     ndvi, valid = grid[0], grid[1] > 0
