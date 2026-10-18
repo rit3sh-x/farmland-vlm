@@ -87,7 +87,6 @@ export function SeasonChart({ season, weather, w = 380, h = 150 }) {
       {pts.map((p) => { const [r, g, b] = ndviColor(p.ndvi); return <circle key={p.date} cx={X(p.date)} cy={Y(p.ndvi)} r="3.2" fill={`rgb(${r},${g},${b})`} /> })}
       <text x={X(season.peak.date)} y={Y(season.peak.ndvi) - 7} textAnchor="middle" className="peak">peak {season.peak.ndvi.toFixed(2)}</text>
       {months.map((m) => <text key={+m} x={X(m.toISOString())} y={h - 8} textAnchor="middle" className="month">{m.toLocaleString('en', { month: 'short' })}</text>)}
-      <text x={w - 12} y={14} textAnchor="end" className="month">NDVI · {wet.length > 1 ? 'soil wetness (dashed) · ' : ''}rain bars</text>
     </svg>
   )
 }

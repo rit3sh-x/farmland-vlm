@@ -31,6 +31,7 @@ function FieldPanel({ box, field, layers, setLayers }) {
     <div className="field-panel">
       {field.summary ? <p className="summary big">{field.summary.text}</p> : <p className="summary big muted">Reading satellite data for this box…</p>}
       <SeasonChart season={field.season?.series ? field.season : null} weather={w} />
+      {field.season && <p className="chart-key">Dots: field NDVI from NASA HLS · dashed: root-zone soil wetness · bars: daily rain (NASA POWER)</p>}
       {w && <p className="muted small">Rain since {w.daily[0]?.date}: {w.rain_mm} mm ({w.rain_vs_normal >= 0 ? '+' : ''}{Math.round(w.rain_vs_normal * 100)}% vs NASA POWER normal).</p>}
       <div className="layers">
         {[['s2', 'Sentinel-2 field NDVI', sc ? `10 m · ${sc.date} · ${sc.cloud_pct}% cloud` : 'loading…'],
