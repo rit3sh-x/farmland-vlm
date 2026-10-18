@@ -19,7 +19,7 @@ from farmvlm.stats import StatsTable
 def nice(x: float) -> float:
     """Round a cut point to two significant figures, then to the nearest 0.5 step of its decade."""
     d = 10 ** np.floor(np.log10(x))
-    return float(round(x / d * 2) / 2 * d)
+    return round(float(round(x / d * 2) / 2 * d), 6)
 
 
 def main():
