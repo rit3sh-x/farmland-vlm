@@ -221,3 +221,15 @@ def test_photometric_variants_keep_size():
     img = Image.fromarray(np.random.default_rng(0).integers(0, 255, (384, 384, 3), dtype=np.uint8))
     for kind, s in variants():
         assert apply(img, kind, s).size == (384, 384), kind
+
+
+def test_question_family_matches_every_template():
+    from farmvlm.items import Item, QUESTION_TEMPLATES
+    from farmvlm.text import question_family
+    for fam, (train, held) in QUESTION_TEMPLATES.items():
+        for k in range(len(train) + len(held)):
+            item = Item(0, fam, -1 if fam == "identify" else WEED, "", False)
+            q = render_question(item, k, heldout=k >= len(train))
+            got = question_family(q)
+            assert got[0] == fam, q
+            assert got[1] == (-1 if fam == "identify" else WEED), q

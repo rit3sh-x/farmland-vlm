@@ -5,6 +5,8 @@ the RGB tile and its NDVI map, with a sentence saying which is which.
 """
 import torch
 
+from farmvlm.prompts import CAPTION_PROMPT, NDVI_NOTE
+
 MODELS = {
     "lfm-450m": "LiquidAI/LFM2.5-VL-450M",
     "lfm-1.6b": "LiquidAI/LFM2.5-VL-1.6B",
@@ -13,8 +15,6 @@ MODELS = {
 # Laptop cold caption + answer time order from the feasibility check, fastest first (bake-off tiebreak).
 SPEED_ORDER = ("lfm-450m", "lfm-1.6b", "qwen35-2b")
 MICRO_BATCH = {"lfm-450m": 16, "lfm-1.6b": 4, "qwen35-2b": 2}
-CAPTION_PROMPT = "Describe the anomalies in this tile."
-NDVI_NOTE = "The second image is the same tile's NDVI map: red is stressed or bare ground, green is healthy crop. "
 
 
 def messages(question: str, n_images: int, answer: str | None = None):

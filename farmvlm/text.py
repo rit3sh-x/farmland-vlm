@@ -52,8 +52,51 @@ def _loc_word(phrase: str | None) -> str | None:
     return re.sub(r"^at the ", "", s)
 
 
+def mention_spans(caption: str) -> list[tuple[Mention, int, int]]:
+    """Each class mention with its character span in the caption."""
+    s = caption.lower().replace("center", "centre")
+    return [(Mention(_NAME_INDEX[m["name"]], m["ext"], _loc_word(m["loc"]), m["poss"] is not None), m.start(), m.end())
+            for m in _MENTION.finditer(s)]
+
+
 def parse_caption(caption: str) -> tuple[Mention, ...]:
     """Every class mention in a caption with whatever extent and location words sit around it."""
-    s = caption.lower().replace("center", "centre")
-    return tuple(Mention(_NAME_INDEX[m["name"]], m["ext"], _loc_word(m["loc"]), m["poss"] is not None)
-                 for m in _MENTION.finditer(s))
+    return tuple(m for m, _, _ in mention_spans(caption))
+
+
+WHY = {  # the one-line reason shown under a hedged answer, per hedge type
+    "possibly": "It covers only a sliver of the field, so a few pixels decide it.",
+    "range": "Its area is close to the cut-off between those two sizes.",
+    "or": "Two parts of the tile hold almost the same share of it.",
+}
+
+
+def why(answer: str) -> str | None:
+    a = normalise(answer)
+    if a.startswith("possibly") or ", possibly" in a:
+        return WHY["possibly"]
+    if " to " in a:
+        return WHY["range"]
+    if " or " in a:
+        return WHY["or"]
+    return None
+
+
+_FAMILY_CUES = (
+    ("location", ("where", "which part", "which area", "point to", "in which part")),
+    ("extent", ("how much", "how large", "how big", "how extensive", "how widespread", "what share", "small, moderate")),
+    ("identify", ("what anomal", "which anomal", "what field", "list ", "what problems", "which crop issues",
+                  "what is wrong", "name every")),
+)
+
+
+def question_family(question: str) -> tuple[str, int]:
+    """(family, class index or -1) of a free-text question, so the UI can draw the right answer widget."""
+    q = question.lower()
+    names = sorted(((n, i) for i, c in enumerate(CLASSES) for n in (c.name, *c.synonyms, c.key.replace("_", " "))),
+                   key=lambda x: -len(x[0]))
+    cls = next((i for n, i in names if n in q), -1)
+    for fam, cues in _FAMILY_CUES:
+        if any(q.startswith(c) or f" {c}" in q for c in cues):
+            return fam, cls
+    return "presence", cls
