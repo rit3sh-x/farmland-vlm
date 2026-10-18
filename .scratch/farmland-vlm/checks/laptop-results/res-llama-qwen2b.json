@@ -1,0 +1,78 @@
+{
+ "label": "llama-qwen2b",
+ "load_s": 5.8,
+ "peak_rss_gb": 3.06,
+ "caption": {
+  "median_wall_s": 13.22,
+  "max_wall_s": 13.72,
+  "prompt_tok": 284,
+  "gen_tok": [
+   60,
+   60,
+   60,
+   60
+  ],
+  "prefill_ms": 7396,
+  "decode_tok_s": 9.4
+ },
+ "answer": {
+  "median_wall_s": 9.72,
+  "max_wall_s": 9.92,
+  "prompt_tok": 283,
+  "gen_tok": [
+   20,
+   20,
+   20,
+   20
+  ],
+  "prefill_ms": 6672,
+  "decode_tok_s": 10.6
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "id": 9405,
+   "token": "yes",
+   "bytes": [
+    121,
+    101,
+    115
+   ],
+   "logprob": -0.5154016613960266
+  },
+  {
+   "id": 2083,
+   "token": "no",
+   "bytes": [
+    110,
+    111
+   ],
+   "logprob": -1.2386492490768433
+  },
+  {
+   "id": 9542,
+   "token": " yes",
+   "bytes": [
+    32,
+    121,
+    101,
+    115
+   ],
+   "logprob": -2.6144540309906006
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "The image displays a straight, narrow road cutting through a field of crops, with the right side showing a uniform, light-brown crop pattern and the left side featuring denser green vegetation, suggesting possible agricultural variation or land use change. No specific anomalies like disease, pests, or structural damage are visibly",
+   "nutrient_deficiency.jpg": "The image displays a uniform, densely planted crop field with no visible anomalies, suggesting healthy, evenly spaced vegetation across the entire frame. (Note: If you intended to show an anomaly, please provide a corrected image.)\n\nHowever, if you meant to describe the *texture* or *pattern* of",
+   "water.jpg": "The image displays a textured, abstract surface with irregular dark streaks and smudges against a lighter blue-gray background, resembling a weathered or painted canvas rather than a typical crop field. No agricultural anomalies are visible.\n\n(Note: The original question appears to misinterpret the image as an aerial crop",
+   "weed_cluster.jpg": "The crop field shows scattered patches of green vegetation and some darker, possibly diseased or stressed areas, indicating localized anomalies in crop health or growth patterns. The left edge appears to be a different crop type or boundary, contrasting with the main field. Overall, the image reveals uneven vegetation distribution and potential stress"
+  },
+  "answer": {
+   "drydown.jpg": "yes. The image shows a field with a distinct color gradient from green on the left to brownish",
+   "nutrient_deficiency.jpg": "yes. The image shows a field of crops with visible drydown patterns\u2014specifically, areas where",
+   "water.jpg": "yes. drydown is a technique used in painting where the paint is left to dry on the canvas",
+   "weed_cluster.jpg": "yes. drydown is a phenomenon where the initial vibrant colors of a paint or pigment fade over time"
+  }
+ }
+}

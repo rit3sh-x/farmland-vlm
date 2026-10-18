@@ -1,0 +1,75 @@
+{
+ "label": "mrs-qwen2b",
+ "load_s": 18.3,
+ "peak_rss_gb": 6.04,
+ "caption": {
+  "median_wall_s": 15.67,
+  "max_wall_s": 17.18,
+  "prompt_tok": 284,
+  "gen_tok": [
+   41,
+   26,
+   36,
+   44
+  ],
+  "usage_extra": {
+   "avg_tok_per_sec": 23.49,
+   "avg_prompt_tok_per_sec": 31.92,
+   "avg_compl_tok_per_sec": 8.3,
+   "total_time_sec": 13.84,
+   "total_prompt_time_sec": 8.9,
+   "total_completion_time_sec": 4.94
+  }
+ },
+ "answer": {
+  "median_wall_s": 5.45,
+  "max_wall_s": 5.63,
+  "prompt_tok": 283,
+  "gen_tok": [
+   2,
+   2,
+   2,
+   2
+  ],
+  "usage_extra": {
+   "avg_tok_per_sec": 66.87,
+   "avg_prompt_tok_per_sec": 68.36,
+   "avg_compl_tok_per_sec": 16.39,
+   "total_time_sec": 4.26,
+   "total_prompt_time_sec": 4.14,
+   "total_completion_time_sec": 0.12
+  }
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "token": 9405,
+   "logprob": -0.53205794,
+   "bytes": "yes"
+  },
+  {
+   "token": 2083,
+   "logprob": -1.0022479,
+   "bytes": "no"
+  },
+  {
+   "token": 9542,
+   "logprob": -3.5543318,
+   "bytes": " yes"
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "The image displays a straight, narrow road cutting through a field of crops, with the right side showing a patch of brownish, possibly harvested or dormant vegetation, while the left remains green and uniform.",
+   "nutrient_deficiency.jpg": "The image displays a uniform, densely planted crop field with no visible anomalies such as weeds, crop failure, or structural defects.",
+   "water.jpg": "The image displays a textured, abstract pattern resembling brushstrokes or smudged paint on a uniform blue-gray surface, with no discernible crop field anomalies or geographical features.",
+   "weed_cluster.jpg": "The crop field anomalies visible in this aerial image are characterized by a distinct greenish discoloration and patchy texture, suggesting potential issues such as nutrient deficiency, pest damage, or environmental stress affecting the crop health."
+  },
+  "answer": {
+   "drydown.jpg": "yes",
+   "nutrient_deficiency.jpg": "no",
+   "water.jpg": "yes",
+   "weed_cluster.jpg": "yes"
+  }
+ }
+}

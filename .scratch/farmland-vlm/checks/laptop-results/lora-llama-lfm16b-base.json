@@ -1,0 +1,79 @@
+{
+ "label": "llama-lfm16b-base",
+ "load_s": 2.0,
+ "peak_rss_gb": 2.06,
+ "caption": {
+  "median_wall_s": 8.71,
+  "max_wall_s": 9.08,
+  "prompt_tok": 277,
+  "gen_tok": [
+   60,
+   60,
+   60,
+   60
+  ],
+  "prefill_ms": 5552,
+  "decode_tok_s": 39.4
+ },
+ "answer": {
+  "median_wall_s": 7.01,
+  "max_wall_s": 7.59,
+  "prompt_tok": 275,
+  "gen_tok": [
+   3,
+   2,
+   2,
+   2
+  ],
+  "prefill_ms": 6941,
+  "decode_tok_s": 38.9
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "id": 12948,
+   "token": "Yes",
+   "bytes": [
+    89,
+    101,
+    115
+   ],
+   "logprob": -0.6755092740058899
+  },
+  {
+   "id": 5048,
+   "token": "No",
+   "bytes": [
+    78,
+    111
+   ],
+   "logprob": -1.2352837324142456
+  },
+  {
+   "id": 29096,
+   "token": "Based",
+   "bytes": [
+    66,
+    97,
+    115,
+    101,
+    100
+   ],
+   "logprob": -2.728825330734253
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "The image shows an aerial view of farmland with a road running through it. The most notable anomaly is the presence of a large, irregularly shaped patch of bare soil in the center of the image. This patch of bare soil is surrounded by a ring of vegetation, which appears to be a mix of",
+   "nutrient_deficiency.jpg": "The image shows a patch of green farmland with a distinct diagonal line running through it. This line appears to be a natural feature, such as a river or stream, that has been captured in the aerial view. The rest of the farmland is uniform in color and texture, indicating that it is likely a",
+   "water.jpg": "The image shows an aerial view of farmland with a distinct pattern of dark patches that appear to be irregular in shape and size. These patches are scattered across the field and do not follow a uniform distribution. The dark areas contrast sharply with the lighter surrounding soil, suggesting variations in moisture content, crop health,",
+   "weed_cluster.jpg": "The anomalies in this aerial farmland tile are the vertical lines that appear to be cracks or fissures in the ground. These lines are irregular in shape and size, and they are not consistent with the natural contours of the land. They also appear to be randomly distributed throughout the tile, rather than being concentrated"
+  },
+  "answer": {
+   "drydown.jpg": "Yes.",
+   "nutrient_deficiency.jpg": "No",
+   "water.jpg": "No",
+   "weed_cluster.jpg": "No"
+  }
+ }
+}

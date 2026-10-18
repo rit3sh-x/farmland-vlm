@@ -1,0 +1,77 @@
+{
+ "label": "llama-qwen08b",
+ "load_s": 2.5,
+ "peak_rss_gb": 1.5,
+ "caption": {
+  "median_wall_s": 4.28,
+  "max_wall_s": 4.36,
+  "prompt_tok": 284,
+  "gen_tok": [
+   60,
+   60,
+   60,
+   60
+  ],
+  "prefill_ms": 2106,
+  "decode_tok_s": 29.2
+ },
+ "answer": {
+  "median_wall_s": 2.86,
+  "max_wall_s": 4.15,
+  "prompt_tok": 283,
+  "gen_tok": [
+   20,
+   20,
+   20,
+   20
+  ],
+  "prefill_ms": 2249,
+  "decode_tok_s": 34.0
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "id": 2083,
+   "token": "no",
+   "bytes": [
+    110,
+    111
+   ],
+   "logprob": -0.6873607039451599
+  },
+  {
+   "id": 9405,
+   "token": "yes",
+   "bytes": [
+    121,
+    101,
+    115
+   ],
+   "logprob": -0.7981777191162109
+  },
+  {
+   "id": 9175,
+   "token": "Yes",
+   "bytes": [
+    89,
+    101,
+    115
+   ],
+   "logprob": -4.031147003173828
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "The image shows a split field with green on the left and brownish on the right, with a narrow white line separating them.\n</think>\n\nThe image shows a split field with green on the left and brownish on the right, with a narrow white line separating them.\nThis is likely a",
+   "nutrient_deficiency.jpg": "The image shows a dense, uniform crop field with no visible anomalies.\n</think>\n\nThe image shows a dense, uniform crop field with no visible anomalies.\nThe image shows a dense, uniform crop field with no visible anomalies.\nThe image shows a dense, uniform crop field with no visible anomalies",
+   "water.jpg": "The image displays a textured, abstract composition with dark brushstrokes against a muted blue-gray background.\n</think>\n\nThe image displays a textured, abstract composition with dark brushstrokes against a muted blue-gray background.\n</think>\n\nThe image displays a textured, abstract composition with dark brushstrokes against",
+   "weed_cluster.jpg": "The image displays a close-up of a textured surface, likely wood or a similar material, with a distinct vertical grain pattern and a few scattered green specks.\n</think>\n\nThe image displays a close-up of a textured surface, likely wood or a similar material, with a distinct vertical grain pattern and"
+  },
+  "answer": {
+   "drydown.jpg": "no.\n\nThe image shows a clear, unbroken strip of green vegetation running vertically down the center",
+   "nutrient_deficiency.jpg": "no.\n\n**Reasoning:**\nThe image displays a highly detailed, textured surface that appears to",
+   "water.jpg": "no.\n\n**Reasoning:**\nThe image displays a texture that appears to be a painted or",
+   "weed_cluster.jpg": "yes.\n\n**Reasoning:**\nThe image displays a texture that appears to be a wood grain"
+  }
+ }
+}

@@ -1,0 +1,45 @@
+{
+ "label": "mrs-lfm16b",
+ "load_s": 8.8,
+ "peak_rss_gb": 4.23,
+ "caption": {
+  "median_wall_s": 29.27,
+  "max_wall_s": 30.33,
+  "prompt_tok": 282,
+  "gen_tok": [
+  ],
+  "usage_extra": {
+   "avg_tok_per_sec": 10.75,
+   "avg_prompt_tok_per_sec": 10.34,
+   "avg_compl_tok_per_sec": 18.11,
+   "total_time_sec": 28.75,
+   "total_prompt_time_sec": 27.26,
+   "total_completion_time_sec": 1.49
+ "answer": {
+  "median_wall_s": 23.89,
+  "max_wall_s": 26.77,
+  "prompt_tok": 280,
+  "gen_tok": [
+  ],
+  "usage_extra": {
+   "avg_tok_per_sec": 12.53,
+   "avg_prompt_tok_per_sec": 12.45,
+   "avg_compl_tok_per_sec": 32.97,
+   "total_time_sec": 22.59,
+   "total_prompt_time_sec": 22.5,
+   "total_completion_time_sec": 0.09
+ "logprobs": true,
+ "lp_example": [
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "The aerial image reveals a patchwork of green and brown fields, with some areas showing signs of irregular growth patterns and discoloration.",
+   "nutrient_deficiency.jpg": "The aerial image reveals a patchwork of green and brown fields, with irregular patterns suggesting potential crop stress or uneven growth.",
+   "water.jpg": "The aerial image reveals a patchwork of irregularly shaped, dark-colored fields with varying textures and patterns, suggesting potential anomalies such as crop damage, waterlogging, or uneven soil moisture.",
+   "weed_cluster.jpg": "The aerial image reveals a patch of green vegetation in the middle of a predominantly grey crop field, indicating a possible anomaly or variation in the crop growth."
+  "answer": {
+   "drydown.jpg": "Yes.",
+   "nutrient_deficiency.jpg": "No.",
+   "water.jpg": "No.",
+   "weed_cluster.jpg": "No."
+}

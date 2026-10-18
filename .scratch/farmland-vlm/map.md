@@ -1,0 +1,56 @@
+# Farmland VLM — captioning & VQA for crop anomalies
+
+Label: wayfinder:map
+
+## Destination
+
+One build-ready spec covering QA-pair generation → BLIP zero-shot baseline → BLIP-LoRA and served-model fine-tune → evaluation → backend API → Vite UI, every decision locked, ready to split into build tickets with `/to-issues`.
+
+## Notes
+
+- Domain: AI 512 (IIT Ropar) Project 3, brief at [project3.md](../../project3.md). Glossary at [CONTEXT.md](../../CONTEXT.md).
+- Solo, ~7 weeks from 2026-10-18.
+- Graded core is fixed by the brief: Baseline vs BLIP-LoRA ablation, hedging on ambiguous cases, robustness (paraphrases, perturbed images), dynamic cross-validation. The served model is an extra comparison row on top, never a replacement.
+- Model work (training, merging, conversion): Colab free T4 driven from the terminal with the `colab` CLI (`colab --auth adc ...`), per the user on 2026-10-18. Kaggle free T4×2 stays the researched fallback (~30 h/week, 12 h per session). Either way, fp16 only (no bf16 / FlashAttention-2).
+- Laptop disk: only ~10 GB to spare (WSL's 875 GB figure is the virtual disk, not real space), and space freed inside WSL isn't returned to Windows without compacting the disk. So big downloads and conversions happen on Colab; the laptop only gets final quantized weights.
+- **AI stays the centre** (user, 2026-10-19): ML work wins every trade-off against app work. Extras added for marks: a split-leakage study, risk–coverage curves, and BLIP "where it looked" heatmaps; see [Evaluation protocol](issues/06-evaluation-protocol.md).
+- Serving: local laptop demo on CPU (WSL2, 7.8 GB RAM, 16 cores, no GPU). No public hosting.
+- Backend: fully Python (FastAPI + llama.cpp's `llama-server` + transformers for BLIP), decided in [Served model and backend stack](issues/07-served-model-and-backend.md). The user's standing rule still holds: **no Rust + Python hybrid**.
+- UI: React + Vite. Must be intuitive and polished, not a plain form. Map: MapLibre GL JS + OpenFreeMap `liberty` style, with a drag-to-select field box. Layout: "Map + chat" (see [UI prototype](issues/09-ui-prototype.md)).
+- Location imagery: a context panel only, per [Role of location imagery in the app](issues/08-location-imagery-role.md). The TA's "NASA API" is GIBS. Still worth asking the TA whether they expected the imagery to go *into* the model; the report explains why it can't (≈3 MODIS pixels per field). External field data comes only from hosted APIs (Planetary Computer, NASA titiler-cmr, NASA POWER); our side runs inference only.
+- Agriculture-Vision terms: non-commercial research only, no redistribution, download only via the official links (S3 or `shi-labs/Agriculture-Vision` on HF), so no Kaggle/HF mirrors. Re-streaming the official tar takes ~13 min per Colab session, so no private copy is needed; ask the TA (or support@intelinair.com) whether a private preprocessed copy counts as "posting" only if we later want one.
+- Skills: `/grilling` + `/domain-modeling` for grilling tickets, `/prototype` for the UI ticket, `/research` for research tickets.
+- No git repo, so research findings live in `research/*.md` next to this map instead of `research/<name>` branches.
+
+## Decisions so far
+
+<!-- one line per closed ticket: gist + link -->
+
+- [Agriculture-Vision access and label structure](issues/01-agriculture-vision-access.md) — the 94,986 tiles are the 2021 "supervised" release (one 21 GB tar, anonymous download); 9 classes, test unlabeled; filename prefix is a flight, and the manifest maps 3,432 flights to 2,116 fields, so group folds on the manifest's field; 10–15 cm/px, heavily skewed classes.
+- [Candidate models for the served model](issues/02-candidate-models.md) — shortlist Qwen3.5-2B, LFM2.5-VL-1.6B, Gemma 4 E2B: all LoRA-trainable on a T4 and estimated (not measured) to run on the laptop as Q4 GGUF; JEPA stacks and remote-sensing VLMs judged not viable.
+- [NASA imagery sources and fit with Agriculture-Vision](issues/04-nasa-imagery-sources.md) — TA likely meant GIBS / Worldview (keyless, pre-rendered true colour / NDVI by bbox); at 10–30 m no satellite imagery can feed the model, so it suits a context panel. Only USDA NAIP (0.3–0.6 m, RGB+NIR) comes close.
+- [Rust inference support for BLIP and candidates](issues/03-rust-inference-support.md) — pure Rust works via mistral.rs v0.9.4 + axum for SmolVLM v1, Qwen2.5/3-VL, LFM2.5-VL, Gemma 4 and (follow-up check) Qwen3.5, so the whole shortlist has a Rust path (merged LoRA, quantized at load); candle has BLIP captioning but no BLIP VQA; nobody publishes CPU latency for these in Rust.
+- [Laptop feasibility check for shortlisted models](issues/10-laptop-feasibility-check.md) — all five run on the laptop CPU in llama.cpp and mistral.rs from the same Q4 GGUF + projector. llama.cpp is 1.3–4× faster at prefill and uses ~½ the RAM (cold caption/answer: LFM-450M 2.3/1.9 s, Qwen-0.8B 4.3/2.9 s, Gemma-E2B 8.7/5.2 s, Qwen-2B 12.4/9.0 s, or 8.3/5.6 s at 144 image tokens). Logprobs work for hedging. A trained LoRA reaches the laptop intact as a 22–34 MB runtime adapter, or as a merged GGUF when the vision tower is adapted.
+- [Training feasibility check (Colab T4)](issues/12-kaggle-training-check.md) — fp16 LoRA trains on one free Colab T4 with no NaNs: BLIP ~18 samples/s, LFM-450M 9.4, Qwen-0.8B 3.8, LFM-1.6B 3.0, Qwen-2B 2.5, Gemma-E2B 1.6 (batch 1). That is ~1 h (BLIP) to 7–13 h (1.6–2B) per 75k-pair pass. Qwen/Gemma show recurring loss-scale overflows. The official tar re-streams in 12.5 min; adapters come home via `colab download` (0.28 MB/s); merged weights need HF Hub.
+- [QA-pair and caption generation scheme](issues/05-qa-pair-scheme.md) — RGB input for every model, plus a served-model-only RGB + NDVI two-image comparison row. All nine classes. Presence / Identify / Extent (global small–moderate–large cut points) / Location (3×3 majority cell) questions with closed answers. Multi-phrasing template captions. Mask-flagged ambiguous cases train on fixed hedges. Quadrant views supply clean examples. Full pool + balanced sampler; held-out templates for paraphrase tests.
+- [Evaluation protocol](issues/06-evaluation-protocol.md) — 5-fold field-grouped CV regenerated from a recorded seed. Baseline and BLIP-LoRA on all 5 folds; served model and its NDVI row on fold 0 (~40 GPU-h est.). Tuning on inner grouped validation. One fixed ~2,000-tile stratified test sample per fold. Generated answers plus ranked answers for BLIP. Captions: BLEU/ROUGE/CIDEr + fact F1. Hedging: partial credit, 2×2 and calibration. Robustness: paraphrases, photometric, resolution loss (the NAIP stand-in), geometric. Std over folds and field-grouped bootstrap. Fixes the report's 7 tables and 5 figures.
+- [Served model and backend stack](issues/07-served-model-and-backend.md) — served model picked by a ~2.5 GPU-h bake-off (Qwen3.5-2B vs LFM2.5-VL-1.6B vs 450M): the fastest within ~2 points of the best. Plain 16-bit LoRA. Graded BLIP = caption-base + vqa-base. Backend fully Python: FastAPI managing `llama-server`, with adapters switched per request, plus zero-shot BLIP in transformers. The demo serves the served model, its NDVI variant and zero-shot BLIP.
+- [Role of location imagery in the app](issues/08-location-imagery-role.md) — context panel only. Pin + resizable ~800 m field box. NASA GIBS layers (MODIS NDVI, HLS true colour) in the browser, a Sentinel-2 10 m field NDVI from Earth Search, an NDVI-over-the-season chart and a rule-based "where, not why" summary. Optional pin per analysis. ~5 cached showcase fields for offline use. NAIP dropped. A raw-flight whole-field explorer is a stretch item, first to cut.
+- [UI prototype](issues/09-ui-prototype.md) — Variant D "Map + chat", after two rounds (A–C, then D–E). A full-screen OpenFreeMap map with a drag-select field box; one right panel with tabs "Ask the tile" (image + RGB/NDVI/ground truth + model picker + chat with finding rows and "Compare with") and "Field context" (big summary, season chart, layers). Small 3×3 square grids as the motif; amber hedges. React + Vite, sand/green/serif look, keyless OSM place search. The HLS layer needs a per-field latest-clear-date lookup.
+- [PEFT configuration and sweep](issues/13-peft-configuration.md) — 384 px for every model (~144 VLM tokens). BLIP: one-knob-at-a-time sweep on fold 0's inner validation set (rank → LR → targets, ~3.5 GPU-h), final runs ≤120k pairs, optional DoRA row on BLIP VQA. Served model: r=16/LR 1e-4, LM-only runtime adapters; a vision-tower test picks the merged route only on a ≥2-point win; final runs ≤60k pairs. Early stop every 5k pairs with resumable checkpoints; fp16 levers; ~35–45 GPU-h in total (est.).
+- [API contract](issues/14-api-contract.md) — FastAPI, same origin, one global model queue, and NDJSON streams for every model call. `/api/read` (caption + findings parsed from it, with token-probability confidence), single-turn `/api/ask`, and `/api/field` (scene · season · summary · unavailable events). Gallery from fold 0's test sample; uploads go to an in-memory LRU. The browser calls OpenFreeMap, GIBS and Photon directly.
+- [Free hosted APIs for field-context data](issues/17-free-hosted-field-apis.md) — all keyless, verified live. Planetary Computer for the Sentinel-2 scene, NDVI PNG and box stats; NASA titiler-cmr for the whole HLS season series in one call; NASA POWER for weather and soil wetness; Photon has CORS. User rule: hosted APIs for all external data, only inference on our side; adds a NASA POWER weather strip and soil-wetness line.
+- [Training code layout and data logistics](issues/15-training-code-and-logistics.md) — one public GitHub repo (`farmvlm/` package, `scripts/`, three thin notebooks, `app/backend` + `app/web`, `report/`), guarded against dataset files, notebook outputs and secrets. Weights, checkpoints and run records go through a private HF Hub repo with a scoped token on Colab. Each session clones the repo, streams the tar and builds the stats + 384 px cache.
+- [Schedule, GPU budget and cut-line](issues/16-schedule-and-cut-line.md) — W1–W7 (19 Oct–6 Dec), ML-first on the brief's milestones, with the app built while runs train and W7 as buffer. ~35–45 GPU-h on Colab with Kaggle ready from W1. Cut order: DoRA → raw-flight explorer → NDVI variant → extra served folds → field-context extras → UI polish → served fine-tune (the demo then serves BLIP-LoRA). The graded core is never cut. Sunday checkpoints on 8, 15, 22 and 29 Nov.
+- [Kaggle and Colab free GPU limits](issues/11-free-gpu-limits.md) — Kaggle free is T4×2 only, 30 h/week and 12 h/session confirmed, 29 GB RAM, 20 GB saved output reusable as later input; T4 means fp16 + SDPA; a ~13 h epoch needs DDP or chained time-boxed commits.
+
+## Not yet specified
+
+Nothing left. All fog has graduated and every ticket is resolved (2026-10-19): the destination spec is complete and ready for `/to-issues`.
+
+## Out of scope
+
+- Project 4's groundwater / GRACE-FO track — separate project.
+- Writing the LaTeX report and Beamer deck — done after the build; this map only fixes which results they need (see Evaluation protocol).
+- Public hosting, accounts, multi-user, saved history — the demo runs on the local laptop.
+- Building and training — follows the spec, split with `/to-issues`.

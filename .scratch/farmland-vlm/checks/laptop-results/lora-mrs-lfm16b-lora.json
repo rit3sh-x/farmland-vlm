@@ -1,0 +1,75 @@
+{
+ "label": "mrs-lfm16b-lora",
+ "load_s": 8.0,
+ "peak_rss_gb": 4.31,
+ "caption": {
+  "median_wall_s": 19.81,
+  "max_wall_s": 20.69,
+  "prompt_tok": 277,
+  "gen_tok": [
+   7,
+   7,
+   7,
+   7
+  ],
+  "usage_extra": {
+   "avg_tok_per_sec": 15.25,
+   "avg_prompt_tok_per_sec": 15.3,
+   "avg_compl_tok_per_sec": 13.28,
+   "total_time_sec": 18.63,
+   "total_prompt_time_sec": 18.1,
+   "total_completion_time_sec": 0.53
+  }
+ },
+ "answer": {
+  "median_wall_s": 26.4,
+  "max_wall_s": 61.39,
+  "prompt_tok": 275,
+  "gen_tok": [
+   2,
+   2,
+   2,
+   2
+  ],
+  "usage_extra": {
+   "avg_tok_per_sec": 15.18,
+   "avg_prompt_tok_per_sec": 15.14,
+   "avg_compl_tok_per_sec": 22.73,
+   "total_time_sec": 18.25,
+   "total_prompt_time_sec": 18.16,
+   "total_completion_time_sec": 0.09
+  }
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "token": 2744,
+   "logprob": -0.27166352,
+   "bytes": "no"
+  },
+  {
+   "token": 12184,
+   "logprob": -1.4522294,
+   "bytes": "yes"
+  },
+  {
+   "token": 12948,
+   "logprob": -7.779228,
+   "bytes": "Yes"
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "This tile shows weed cluster.",
+   "nutrient_deficiency.jpg": "This tile shows weed cluster.",
+   "water.jpg": "This tile shows weed cluster.",
+   "weed_cluster.jpg": "This tile shows weed cluster."
+  },
+  "answer": {
+   "drydown.jpg": "no",
+   "nutrient_deficiency.jpg": "no",
+   "water.jpg": "no",
+   "weed_cluster.jpg": "no"
+  }
+ }
+}

@@ -1,0 +1,77 @@
+{
+ "label": "llama-qwen2b-lora",
+ "load_s": 2.5,
+ "peak_rss_gb": 3.09,
+ "caption": {
+  "median_wall_s": 7.74,
+  "max_wall_s": 8.28,
+  "prompt_tok": 280,
+  "gen_tok": [
+   7,
+   7,
+   7,
+   7
+  ],
+  "prefill_ms": 7316,
+  "decode_tok_s": 16.2
+ },
+ "answer": {
+  "median_wall_s": 6.44,
+  "max_wall_s": 7.32,
+  "prompt_tok": 278,
+  "gen_tok": [
+   2,
+   2,
+   2,
+   2
+  ],
+  "prefill_ms": 6352,
+  "decode_tok_s": 17.7
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "id": 2083,
+   "token": "no",
+   "bytes": [
+    110,
+    111
+   ],
+   "logprob": -0.23022319376468658
+  },
+  {
+   "id": 9405,
+   "token": "yes",
+   "bytes": [
+    121,
+    101,
+    115
+   ],
+   "logprob": -1.6302229166030884
+  },
+  {
+   "id": 9175,
+   "token": "Yes",
+   "bytes": [
+    89,
+    101,
+    115
+   ],
+   "logprob": -7.048525333404541
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "This tile shows nutrient deficiency.",
+   "nutrient_deficiency.jpg": "This tile shows nutrient deficiency.",
+   "water.jpg": "This tile shows nutrient deficiency.",
+   "weed_cluster.jpg": "This tile shows nutrient deficiency."
+  },
+  "answer": {
+   "drydown.jpg": "no",
+   "nutrient_deficiency.jpg": "no",
+   "water.jpg": "no",
+   "weed_cluster.jpg": "no"
+  }
+ }
+}

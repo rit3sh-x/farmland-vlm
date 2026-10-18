@@ -1,0 +1,75 @@
+{
+ "label": "mrs-qwen2b-base",
+ "load_s": 7.5,
+ "peak_rss_gb": 5.99,
+ "caption": {
+  "median_wall_s": 15.8,
+  "max_wall_s": 16.59,
+  "prompt_tok": 280,
+  "gen_tok": [
+   60,
+   60,
+   60,
+   60
+  ],
+  "usage_extra": {
+   "avg_tok_per_sec": 21.61,
+   "avg_prompt_tok_per_sec": 31.85,
+   "avg_compl_tok_per_sec": 8.64,
+   "total_time_sec": 15.74,
+   "total_prompt_time_sec": 8.79,
+   "total_completion_time_sec": 6.95
+  }
+ },
+ "answer": {
+  "median_wall_s": 6.07,
+  "max_wall_s": 6.12,
+  "prompt_tok": 278,
+  "gen_tok": [
+   20,
+   20,
+   20,
+   20
+  ],
+  "usage_extra": {
+   "avg_tok_per_sec": 49.37,
+   "avg_prompt_tok_per_sec": 72.66,
+   "avg_compl_tok_per_sec": 9.05,
+   "total_time_sec": 6.04,
+   "total_prompt_time_sec": 3.83,
+   "total_completion_time_sec": 2.21
+  }
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "token": 9175,
+   "logprob": -0.7644201,
+   "bytes": "Yes"
+  },
+  {
+   "token": 82276,
+   "logprob": -1.7816148,
+   "bytes": "Dry"
+  },
+  {
+   "token": 2665,
+   "logprob": -2.0543523,
+   "bytes": "No"
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "This aerial farmland tile shows a **linear anomaly** \u2014 a narrow, straight strip of light-colored material running vertically through the center of the image.\n\n### Description:\n- **Location**: It runs approximately from top to bottom, bisecting the field.\n- **Appearance**: The strip",
+   "nutrient_deficiency.jpg": "This aerial farmland tile displays a highly structured, grid-like pattern of rows and fields, typical of modern agricultural landscapes. The dominant feature is the uniformity of the crop rows \u2014 likely corn or soybeans \u2014 which create a strong diagonal and horizontal alignment across the image.\n\nHowever, several subtle anomalies",
+   "water.jpg": "This image does not show an aerial farmland tile. Instead, it is a close-up photograph of a textured surface \u2014 likely a painted wall, concrete, or painted tile \u2014 with a mottled, brushstroke-like pattern in shades of gray and blue. There are no signs of farmland,",
+   "weed_cluster.jpg": "This aerial farmland tile shows a distinct anomaly: a large, irregular patch of green vegetation growing directly within the cultivated field.\n\n**Analysis:**\n\n*   **Location:** The green area is situated in the central portion of the image, clearly occupying a significant portion of the farmland.\n*"
+  },
+  "answer": {
+   "drydown.jpg": "Yes, there appears to be some drydown visible in this tile.\n\nLooking at the right side",
+   "nutrient_deficiency.jpg": "Yes, there is a visible drydown in this tile.\n\nThe image shows a field of crops",
+   "water.jpg": "Yes, there is a drydown in this tile.\n\nThe image shows a surface with a textured",
+   "weed_cluster.jpg": "Yes, there is a drydown in this tile.\n\nLooking at the image, you can see"
+  }
+ }
+}

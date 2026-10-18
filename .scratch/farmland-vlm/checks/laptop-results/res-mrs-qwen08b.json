@@ -1,0 +1,75 @@
+{
+ "label": "mrs-qwen08b",
+ "load_s": 12.0,
+ "peak_rss_gb": 2.8,
+ "caption": {
+  "median_wall_s": 6.01,
+  "max_wall_s": 6.82,
+  "prompt_tok": 284,
+  "gen_tok": [
+   27,
+   15,
+   21,
+   32
+  ],
+  "usage_extra": {
+   "avg_tok_per_sec": 52.05,
+   "avg_prompt_tok_per_sec": 76.12,
+   "avg_compl_tok_per_sec": 12.03,
+   "total_time_sec": 5.97,
+   "total_prompt_time_sec": 3.73,
+   "total_completion_time_sec": 2.24
+  }
+ },
+ "answer": {
+  "median_wall_s": 2.19,
+  "max_wall_s": 2.19,
+  "prompt_tok": 283,
+  "gen_tok": [
+   2,
+   2,
+   2,
+   2
+  ],
+  "usage_extra": {
+   "avg_tok_per_sec": 132.25,
+   "avg_prompt_tok_per_sec": 137.18,
+   "avg_compl_tok_per_sec": 21.74,
+   "total_time_sec": 2.15,
+   "total_prompt_time_sec": 2.06,
+   "total_completion_time_sec": 0.09
+  }
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "token": 9405,
+   "logprob": -0.77949584,
+   "bytes": "yes"
+  },
+  {
+   "token": 2083,
+   "logprob": -0.97181374,
+   "bytes": "no"
+  },
+  {
+   "token": 9175,
+   "logprob": -2.5885513,
+   "bytes": "Yes"
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "The image shows a split field with green on the left and brown on the right, with a narrow strip of green in between.",
+   "nutrient_deficiency.jpg": "The image shows a dense, uniform crop field with no visible anomalies.",
+   "water.jpg": "The image displays a textured, abstract surface with dark brushstrokes against a muted blue-gray background.",
+   "weed_cluster.jpg": "The image displays a close-up of a textured surface, likely wood or a similar material, with a vertical grain pattern and a few scattered green specks."
+  },
+  "answer": {
+   "drydown.jpg": "yes",
+   "nutrient_deficiency.jpg": "no",
+   "water.jpg": "no",
+   "weed_cluster.jpg": "yes"
+  }
+ }
+}

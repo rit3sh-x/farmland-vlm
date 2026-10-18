@@ -1,0 +1,81 @@
+{
+ "label": "mrs-gemma4",
+ "load_s": 34.1,
+ "peak_rss_gb": 6.17,
+ "caption": {
+  "median_wall_s": 18.7,
+  "max_wall_s": 19.55,
+  "prompt_tok": 281,
+  "gen_tok": [
+   36,
+   36,
+   26,
+   29
+  ],
+  "usage_extra": {
+   "prompt_tokens_details": {
+    "cached_tokens": 5
+   },
+   "avg_tok_per_sec": 17.34,
+   "avg_prompt_tok_per_sec": 20.86,
+   "avg_compl_tok_per_sec": 7.48,
+   "total_time_sec": 18.28,
+   "total_prompt_time_sec": 13.47,
+   "total_completion_time_sec": 4.81
+  }
+ },
+ "answer": {
+  "median_wall_s": 0.61,
+  "max_wall_s": 0.63,
+  "prompt_tok": 280,
+  "gen_tok": [
+   2,
+   2,
+   2,
+   2
+  ],
+  "usage_extra": {
+   "prompt_tokens_details": {
+    "cached_tokens": 262
+   },
+   "avg_tok_per_sec": 454.11,
+   "avg_prompt_tok_per_sec": 570.26,
+   "avg_compl_tok_per_sec": 15.38,
+   "total_time_sec": 0.62,
+   "total_prompt_time_sec": 0.49,
+   "total_completion_time_sec": 0.13
+  }
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "token": 10784,
+   "logprob": -1.0719199,
+   "bytes": "Yes"
+  },
+  {
+   "token": 3771,
+   "logprob": -1.3148912,
+   "bytes": "No"
+  },
+  {
+   "token": 4443,
+   "logprob": -1.4012275,
+   "bytes": "yes"
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "The aerial image displays a field with a distinct road running through it, and the crop exhibits variations in color and texture, suggesting different stages of growth or different types of vegetation.",
+   "nutrient_deficiency.jpg": "The aerial image displays a large, predominantly green crop field with visible variations in texture and color, suggesting differences in crop density, growth stage, or soil conditions across the area.",
+   "water.jpg": "The aerial image displays a crop field with visible streaks and variations in texture, suggesting some form of agricultural activity or soil pattern.",
+   "weed_cluster.jpg": "The aerial image displays a dark, textured field with noticeable vertical lines and patches of green vegetation, suggesting variations in crop growth or soil conditions."
+  },
+  "answer": {
+   "drydown.jpg": "Yes",
+   "nutrient_deficiency.jpg": "No",
+   "water.jpg": "No",
+   "weed_cluster.jpg": "No"
+  }
+ }
+}

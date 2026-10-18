@@ -1,0 +1,75 @@
+{
+ "label": "mrs-lfm16b-base",
+ "load_s": 7.9,
+ "peak_rss_gb": 4.36,
+ "caption": {
+  "median_wall_s": 25.22,
+  "max_wall_s": 35.64,
+  "prompt_tok": 277,
+  "gen_tok": [
+   60,
+   60,
+   60,
+   60
+  ],
+  "usage_extra": {
+   "avg_tok_per_sec": 14.06,
+   "avg_prompt_tok_per_sec": 12.86,
+   "avg_compl_tok_per_sec": 24.63,
+   "total_time_sec": 23.97,
+   "total_prompt_time_sec": 21.54,
+   "total_completion_time_sec": 2.44
+  }
+ },
+ "answer": {
+  "median_wall_s": 23.78,
+  "max_wall_s": 25.08,
+  "prompt_tok": 275,
+  "gen_tok": [
+   3,
+   12,
+   2,
+   2
+  ],
+  "usage_extra": {
+   "avg_tok_per_sec": 13.04,
+   "avg_prompt_tok_per_sec": 12.96,
+   "avg_compl_tok_per_sec": 28.57,
+   "total_time_sec": 21.32,
+   "total_prompt_time_sec": 21.22,
+   "total_completion_time_sec": 0.1
+  }
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "token": 12948,
+   "logprob": -0.6932852,
+   "bytes": "Yes"
+  },
+  {
+   "token": 5048,
+   "logprob": -1.205972,
+   "bytes": "No"
+  },
+  {
+   "token": 29096,
+   "logprob": -2.7519906,
+   "bytes": "Based"
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "The image shows an aerial view of farmland with a road running through it. The most notable anomaly is the presence of a large, irregularly shaped patch of bare soil in the center of the image. This patch of bare soil is surrounded by neatly arranged rows of crops, which suggests that the soil",
+   "nutrient_deficiency.jpg": "The image shows a patch of green farmland with a distinct diagonal line running through it. This line appears to be an anomaly in the otherwise uniform pattern of the farmland. The line could be caused by a variety of factors, such as a natural feature like a river or stream, a man-made structure like",
+   "water.jpg": "The image shows an aerial view of farmland with a distinct pattern of dark patches. These patches appear to be irregular in shape and size, suggesting they may be caused by various factors such as crop rotation, soil conditions, or the presence of water bodies. The dark patches contrast sharply with the lighter areas of",
+   "weed_cluster.jpg": "The image shows an aerial view of farmland, but there are several anomalies that stand out. The most prominent is the presence of a large, irregularly shaped patch of green in the middle of the image. This patch is not consistent with the surrounding farmland, which is mostly a uniform gray color. It"
+  },
+  "answer": {
+   "drydown.jpg": "Yes.",
+   "nutrient_deficiency.jpg": "No, there is no drydown in this tile.",
+   "water.jpg": "No",
+   "weed_cluster.jpg": "No"
+  }
+ }
+}

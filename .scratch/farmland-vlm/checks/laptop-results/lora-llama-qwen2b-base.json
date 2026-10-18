@@ -1,0 +1,77 @@
+{
+ "label": "llama-qwen2b-base",
+ "load_s": 3.0,
+ "peak_rss_gb": 3.04,
+ "caption": {
+  "median_wall_s": 9.96,
+  "max_wall_s": 10.37,
+  "prompt_tok": 280,
+  "gen_tok": [
+   60,
+   60,
+   60,
+   60
+  ],
+  "prefill_ms": 6004,
+  "decode_tok_s": 17.9
+ },
+ "answer": {
+  "median_wall_s": 7.31,
+  "max_wall_s": 8.76,
+  "prompt_tok": 278,
+  "gen_tok": [
+   20,
+   20,
+   20,
+   20
+  ],
+  "prefill_ms": 6306,
+  "decode_tok_s": 19.5
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "id": 9175,
+   "token": "Yes",
+   "bytes": [
+    89,
+    101,
+    115
+   ],
+   "logprob": -0.599476158618927
+  },
+  {
+   "id": 82276,
+   "token": "Dry",
+   "bytes": [
+    68,
+    114,
+    121
+   ],
+   "logprob": -1.9746782779693604
+  },
+  {
+   "id": 2665,
+   "token": "No",
+   "bytes": [
+    78,
+    111
+   ],
+   "logprob": -2.419904947280884
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "This aerial farmland tile shows a **linear anomaly** \u2014 a narrow, straight strip of **light-colored, possibly paved or gravelly surface** running vertically through the center of the image.\n\n### Anomaly Description:\n- **Location**: Runs vertically (north-south orientation), bisecting",
+   "nutrient_deficiency.jpg": "This aerial farmland tile displays a highly structured, grid-like pattern of rows and fields, typical of modern agricultural land management. However, there are subtle anomalies that stand out upon closer inspection:\n\n1. **Asymmetric Field Boundaries**: The diagonal line separating two distinct fields appears slightly irregular or \u201c",
+   "water.jpg": "This image does not show an aerial farmland tile. Instead, it is a close-up photograph of a textured surface \u2014 likely a painted wall, concrete, or painted tile \u2014 with a mottled, brushstroke-like pattern in shades of gray and blue. There are no signs of farmland,",
+   "weed_cluster.jpg": "This aerial farmland tile shows a distinct anomaly: a large, irregular patch of green vegetation growing directly within the cultivated field.\n\n**Analysis:**\n\n*   **Location:** The green area is situated in the central portion of the image, clearly occupying a significant portion of the farmland.\n*"
+  },
+  "answer": {
+   "drydown.jpg": "Yes, there appears to be some drydown visible in this tile.\n\nLooking at the right side",
+   "nutrient_deficiency.jpg": "Yes, there is a visible drydown in this tile.\n\nThe image shows a field of crops",
+   "water.jpg": "Yes, there is a drydown in this tile.\n\nThe image shows a surface with a textured",
+   "weed_cluster.jpg": "Yes, there is a visible drydown in this tile.\n\nThe image shows a vertical surface with"
+  }
+ }
+}

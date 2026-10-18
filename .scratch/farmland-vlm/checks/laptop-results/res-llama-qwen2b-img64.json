@@ -1,0 +1,78 @@
+{
+ "label": "llama-qwen2b-img64",
+ "load_s": 3.8,
+ "peak_rss_gb": 2.9,
+ "caption": {
+  "median_wall_s": 5.21,
+  "max_wall_s": 5.71,
+  "prompt_tok": 92,
+  "gen_tok": [
+   60,
+   60,
+   60,
+   60
+  ],
+  "prefill_ms": 2083,
+  "decode_tok_s": 16.5
+ },
+ "answer": {
+  "median_wall_s": 3.06,
+  "max_wall_s": 4.37,
+  "prompt_tok": 91,
+  "gen_tok": [
+   20,
+   20,
+   20,
+   20
+  ],
+  "prefill_ms": 2003,
+  "decode_tok_s": 19.4
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "id": 9405,
+   "token": "yes",
+   "bytes": [
+    121,
+    101,
+    115
+   ],
+   "logprob": -0.5746749043464661
+  },
+  {
+   "id": 2083,
+   "token": "no",
+   "bytes": [
+    110,
+    111
+   ],
+   "logprob": -1.000540018081665
+  },
+  {
+   "id": 9542,
+   "token": " yes",
+   "bytes": [
+    32,
+    121,
+    101,
+    115
+   ],
+   "logprob": -3.134289026260376
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "The image displays a straight, narrow road cutting through a field of crops, with the left side showing green vegetation and the right side showing rows of crops that appear to be in different stages of growth or possibly affected by some anomaly. The road is clearly visible as a light-colored strip, and the field",
+   "nutrient_deficiency.jpg": "The image displays a uniform, dense green crop field with no visible anomalies, structural defects, or irregularities in the vegetation or land surface. All areas appear consistent in texture, color, and density, indicating healthy, evenly cultivated crops without signs of disease, damage, or environmental stress.\n\n*(Note",
+   "water.jpg": "The crop field anomalies visible in this aerial image are irregular, dark streaks and patches that appear to be caused by uneven soil compaction, water pooling, or vegetation density variations. These anomalies disrupt the uniformity of the field, suggesting potential issues with irrigation, drainage, or crop health. The dark",
+   "weed_cluster.jpg": "The crop field shows localized green patches and vertical streaks, indicating possible nutrient deficiency, pest damage, or moisture-related stress across the field. (Note: The image appears to be a low-resolution or abstract representation rather than a clear aerial view.) \u2014 *Correction: Since the image is abstract and lacks"
+  },
+  "answer": {
+   "drydown.jpg": "yes. The image shows a field with patches of brownish, dry-looking vegetation, particularly in the",
+   "nutrient_deficiency.jpg": "no.\n\nThe image shows a uniform, dense field of green crops with no visible signs of dry",
+   "water.jpg": "yes. drydown is a term used in the context of paint or coatings to describe the process where",
+   "weed_cluster.jpg": "yes. drydown is a term used in photography to describe the gradual fading of a color or tone"
+  }
+ }
+}

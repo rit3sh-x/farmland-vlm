@@ -1,0 +1,38 @@
+{
+ "label": "llama-lfm16b",
+ "load_s": 2.0,
+ "peak_rss_gb": 2.06,
+ "caption": {
+  "median_wall_s": 11.7,
+  "max_wall_s": 12.3,
+  "prompt_tok": 282,
+  "gen_tok": [
+  ],
+  "prefill_ms": 8637,
+  "decode_tok_s": 27.9
+ "answer": {
+  "median_wall_s": 10.12,
+  "max_wall_s": 11.5,
+  "prompt_tok": 280,
+  "gen_tok": [
+  ],
+  "prefill_ms": 9459,
+  "decode_tok_s": 25.1
+ "logprobs": true,
+ "lp_example": [
+   ],
+   ],
+   ],
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "The aerial image reveals a patchwork of green and brown fields, with some areas showing signs of irregular growth patterns and discoloration. This suggests potential issues such as pest infestations, nutrient deficiencies, or variations in soil quality. The presence of these anomalies could indicate the need for targeted agricultural interventions to",
+   "nutrient_deficiency.jpg": "The aerial image reveals a patchwork of green and brown fields, with irregular patterns suggesting potential crop stress or uneven growth. The brown patches could indicate areas of drought, disease, or poor soil quality, while the green areas appear healthy and well-watered. The overall irregularity of the field layout may",
+   "water.jpg": "The aerial image reveals irregular patches of dark and light areas, suggesting potential crop field anomalies such as waterlogging, soil erosion, or crop stress. These anomalies are characterized by abrupt changes in color and texture, indicating areas where the crop growth may be compromised. The presence of these anomalies could be indicative",
+   "weed_cluster.jpg": "The aerial image reveals a patch of green vegetation in the middle of a predominantly grey crop field, indicating a possible anomaly or variation in the crop growth. This anomaly could be due to several factors such as differences in soil quality, irrigation, pest infestations, or disease affecting the crop. The presence"
+  "answer": {
+   "drydown.jpg": "Yes. There is drydown in this image. There is a drydown in the field. There",
+   "nutrient_deficiency.jpg": "No. There is no drydown in this image. The image shows a field with green crops,",
+   "water.jpg": "No. There is no drydown in this image. The image is a solid color with no variations",
+   "weed_cluster.jpg": "No. There is no drydown in this image. The image is clear and shows a wooden surface"
+}

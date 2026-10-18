@@ -1,0 +1,78 @@
+{
+ "label": "llama-qwen2b-img144",
+ "load_s": 2.5,
+ "peak_rss_gb": 2.96,
+ "caption": {
+  "median_wall_s": 8.25,
+  "max_wall_s": 9.29,
+  "prompt_tok": 172,
+  "gen_tok": [
+   60,
+   60,
+   60,
+   60
+  ],
+  "prefill_ms": 3755,
+  "decode_tok_s": 14.5
+ },
+ "answer": {
+  "median_wall_s": 5.55,
+  "max_wall_s": 5.67,
+  "prompt_tok": 171,
+  "gen_tok": [
+   20,
+   20,
+   20,
+   20
+  ],
+  "prefill_ms": 4070,
+  "decode_tok_s": 15.0
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "id": 9405,
+   "token": "yes",
+   "bytes": [
+    121,
+    101,
+    115
+   ],
+   "logprob": -0.6155198812484741
+  },
+  {
+   "id": 2083,
+   "token": "no",
+   "bytes": [
+    110,
+    111
+   ],
+   "logprob": -0.9732983708381653
+  },
+  {
+   "id": 9542,
+   "token": " yes",
+   "bytes": [
+    32,
+    121,
+    101,
+    115
+   ],
+   "logprob": -3.0187830924987793
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "The image displays a straight, narrow road cutting through a field of crops, with the left side showing denser green vegetation and the right side showing lighter, more sparsely planted crops. There are no visible crop field anomalies such as weeds, pests, or disease. The field appears to be in",
+   "nutrient_deficiency.jpg": "The image displays a large-scale agricultural field with distinct diagonal crop rows, showing no visible anomalies or irregularities in the vegetation pattern. The uniformity of the green rows suggests healthy, evenly spaced crops across the entire visible area. There are no signs of disease, pests, or structural damage that would constitute",
+   "water.jpg": "The image displays a textured, abstract pattern resembling brushstrokes or digital noise on a uniform blue-gray background, with no discernible crop field anomalies or agricultural features. It appears to be a close-up of a surface with no identifiable land or field elements.\n\n(Note: The original image does not contain",
+   "weed_cluster.jpg": "The crop field shows a patch of green vegetation that appears to be growing in an unnatural, irregular pattern against the otherwise uniform gray-brown soil texture. This localized green area stands out as an anomaly, suggesting possible contamination, invasive growth, or environmental disturbance within the field. The anomaly is not uniform in"
+  },
+  "answer": {
+   "drydown.jpg": "yes. drydown is a term used in agriculture to describe the process where crops begin to dry out",
+   "nutrient_deficiency.jpg": "no.\n\nThe image shows a uniform, dense field of green vegetation with no visible signs of dry",
+   "water.jpg": "yes. drydown is the process of paint or ink drying after application, often resulting in a matte",
+   "weed_cluster.jpg": "yes. drydown is the process by which a paint or coating dries and develops its final appearance"
+  }
+ }
+}

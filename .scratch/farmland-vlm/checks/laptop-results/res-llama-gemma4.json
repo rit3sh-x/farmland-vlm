@@ -1,0 +1,79 @@
+{
+ "label": "llama-gemma4",
+ "load_s": 5.0,
+ "peak_rss_gb": 4.77,
+ "caption": {
+  "median_wall_s": 8.67,
+  "max_wall_s": 9.0,
+  "prompt_tok": 146,
+  "gen_tok": [
+   60,
+   60,
+   60,
+   60
+  ],
+  "prefill_ms": 3406,
+  "decode_tok_s": 11.3
+ },
+ "answer": {
+  "median_wall_s": 5.22,
+  "max_wall_s": 6.34,
+  "prompt_tok": 145,
+  "gen_tok": [
+   20,
+   20,
+   20,
+   20
+  ],
+  "prefill_ms": 3416,
+  "decode_tok_s": 15.2
+ },
+ "logprobs": true,
+ "lp_example": [
+  {
+   "id": 3771,
+   "token": "No",
+   "bytes": [
+    78,
+    111
+   ],
+   "logprob": -0.8242366313934326
+  },
+  {
+   "id": 10784,
+   "token": "Yes",
+   "bytes": [
+    89,
+    101,
+    115
+   ],
+   "logprob": -1.4485156536102295
+  },
+  {
+   "id": 22515,
+   "token": "Based",
+   "bytes": [
+    66,
+    97,
+    115,
+    101,
+    100
+   ],
+   "logprob": -2.0487637519836426
+  }
+ ],
+ "samples": {
+  "caption": {
+   "drydown.jpg": "The aerial image displays a field with a distinct, straight road running through it, and the crop exhibits variations in color and texture, suggesting different stages of growth or different types of plants.\n\n**Alternatively, focusing on the anomalies:**\n\nThe most prominent anomaly is the straight, light-colored road cutting",
+   "nutrient_deficiency.jpg": "The aerial image displays a large, predominantly green crop field with some variations in texture and color suggesting different planting densities or stages of growth across the area.\n\n**If you are looking for specific anomalies, please provide more context or highlight what you are interested in.** For example, are you asking about:",
+   "water.jpg": "The aerial image displays a crop field with noticeable variations in texture and tone, suggesting differences in crop health, moisture content, or planting density across the area.\n\n*(Since the image provided is a very dark, somewhat abstract texture rather than a clear, identifiable crop field, this description is based on the",
+   "weed_cluster.jpg": "The aerial image displays a field with variations in texture and color, suggesting differences in crop health or growth stages across the area.\n\n**Note:** Without more context or a clearer image, it is difficult to provide a specific, detailed description of the \"anomalies.\" The description above is a general"
+  },
+  "answer": {
+   "drydown.jpg": "No.\n\nThe image shows a field with crops that appear to be growing, and there are no",
+   "nutrient_deficiency.jpg": "No.\n\nThe image shows a field of crops that appear to be healthy and green, with no",
+   "water.jpg": "No. There is no visible drydown in this image. The image appears to be a texture or",
+   "weed_cluster.jpg": "No.\n\nThe image appears to be a texture or a close-up of a surface, possibly"
+  }
+ }
+}
