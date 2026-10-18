@@ -25,13 +25,18 @@ def _geo_mean_prob(scores, sequences, start: int) -> list[float]:
 
 
 class BlipReader:
-    def __init__(self, device="cuda", dtype=torch.float16, vqa=None, captioner=None):
+    """Pass models to wrap them (e.g. a PEFT model during validation); missing ones load from the Hub unless load=False."""
+
+    def __init__(self, vqa=None, captioner=None, device="cuda", dtype=torch.float16, load=True):
         self.device, self.dtype = device, dtype
         self.proc = BlipProcessor.from_pretrained(VQA_ID)
         self.cap_proc = BlipProcessor.from_pretrained(CAPTION_ID)
-        self.vqa = (vqa or BlipForQuestionAnswering.from_pretrained(VQA_ID, dtype=dtype)).to(device).eval()
-        self.cap = (captioner or BlipForConditionalGeneration.from_pretrained(CAPTION_ID, dtype=dtype)).to(device).eval()
-        self.bos = self.vqa.config.text_config.bos_token_id
+        if vqa is None and load:
+            vqa = BlipForQuestionAnswering.from_pretrained(VQA_ID, dtype=dtype).to(device).eval()
+        if captioner is None and load:
+            captioner = BlipForConditionalGeneration.from_pretrained(CAPTION_ID, dtype=dtype).to(device).eval()
+        self.vqa, self.cap = vqa, captioner
+        self.bos = (vqa or captioner).config.text_config.bos_token_id
 
     def _inputs(self, images, questions):
         x = self.proc(images=images, text=questions, return_tensors="pt", padding=True).to(self.device)
