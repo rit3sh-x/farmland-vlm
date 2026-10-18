@@ -130,3 +130,60 @@ def test_sampler_balance():
     assert abs(fams["caption"] - 0.30) < 0.04
     storm = np.mean([i.cls == STORM for i in items if i.family in ("extent", "location")])
     assert storm > 0.04, "rare class should be upweighted above its 2% frequency"
+
+
+def test_caption_parse_round_trips_every_phrasing():
+    from farmvlm.items import findings_of
+    from farmvlm.text import parse_caption
+    rng = np.random.default_rng(3)
+    checked = 0
+    for _ in range(400):
+        area = np.zeros(N_CLASSES, np.float32)
+        cells = rng.dirichlet(np.full(9, rng.choice([0.2, 1, 5])), size=N_CLASSES).astype(np.float32)
+        ks = rng.choice(N_CLASSES, rng.integers(0, 4), replace=False)
+        area[ks] = rng.choice([0.004, 0.04, 0.05, 0.1, 0.24, 0.3, 0.6], len(ks))
+        item = make_item(0, "caption", -1, area, cells, cuts=(0.05, 0.25))
+        want = [(f.cls, f.extent, f.loc, f.tiny) for f in findings_of(area, cells, (0.05, 0.25))]
+        for ref in caption_refs(item):
+            got = [(m.cls, m.extent, m.loc, m.tiny) for m in parse_caption(ref)]
+            assert got == want, ref
+            checked += 1
+    assert checked == 2000
+
+
+def test_normalise_and_identify_set():
+    from farmvlm.text import identify_set, normalise
+    assert normalise("The Centre.") == "centre"
+    assert normalise("  Weed Clusters!") == "weed cluster"
+    assert normalise("a small") == "small"
+    assert identify_set("Drydown, possibly weed cluster") == identify_set("possibly weed cluster and drydown")
+
+
+def test_hedge_credit_and_rates():
+    from farmvlm.items import Item
+    from farmvlm.metrics import vqa_credit, vqa_scores
+    ext = Item(0, "extent", DRY, "small to moderate", True)
+    assert [vqa_credit(ext, p) for p in ("Small to moderate", "small", "large")] == [1.0, 0.5, 0.0]
+    tiny = Item(0, "presence", WEED, "possibly", True)
+    assert [vqa_credit(tiny, p) for p in ("possibly", "yes", "no")] == [1.0, 0.5, 0.0]
+    clear = Item(0, "location", DRY, "top left", False)
+    assert vqa_credit(clear, "top left or top") == 0.0
+    ident = Item(0, "identify", -1, "drydown, possibly weed cluster", True)
+    assert vqa_credit(ident, "drydown") == 0.5 and vqa_credit(ident, "drydown, weed cluster") == 0.5
+    s = vqa_scores([ext, clear], ["small to moderate", "top left or top"])
+    assert s["hedge_rate_ambiguous"] == 1.0 and s["hedge_rate_clear"] == 1.0 and s["accuracy"] == 0.5
+
+
+def test_caption_facts_and_calibration():
+    from farmvlm.metrics import caption_facts, ece, grouped_bootstrap, risk_coverage
+    area = np.zeros(N_CLASSES, np.float32); cells = np.zeros((N_CLASSES, 9), np.float32)
+    area[DRY], cells[DRY, 4] = 0.6, 1.0
+    item = make_item(0, "caption", -1, area, cells)
+    f = caption_facts([item, item], ["Large drydown in the centre.", "an aerial view of a farm field"])
+    assert f["precision"] == 1.0 and f["recall"] == 0.5 and f["extent_acc"] == 1.0
+    conf = np.array([0.9, 0.8, 0.6, 0.3]); ok = np.array([1, 1, 0, 0], float)
+    cov, acc, aurc = risk_coverage(conf, ok)
+    assert acc[1] == 1.0 and acc[-1] == 0.5 and 0 < aurc < 0.5
+    assert ece(np.full(4, 0.5), np.array([1, 0, 1, 0], float)) == pytest.approx(0.0)
+    m, lo, hi = grouped_bootstrap(np.array([1, 1, 0, 0.]), np.array(["a", "a", "b", "b"]))
+    assert m == 0.5 and lo <= m <= hi
