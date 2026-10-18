@@ -1,0 +1,27 @@
+# Agriculture-Vision terms forbid posting the dataset or its derivatives in code repositories.
+data/
+runs/
+cache/
+*.npz
+*.parquet
+*.safetensors
+*.gguf
+*.pt
+*.pth
+*.ckpt
+*.tar
+*.tar.gz
+.scratch/farmland-vlm/prototype-ui/public/tiles/
+report/figures/tiles/
+
+node_modules/
+dist/
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+.ipynb_checkpoints/
+.env
+
+# course handout: keep local
+project3.md

@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Refuse commits that could publish dataset files, notebook outputs or secrets (public repo)."""
+import json
+import re
+import subprocess
+import sys
+
+IMAGE = re.compile(r"\.(png|jpe?g|tiff?|gif|webp|bmp)$", re.I)
+WEIGHTS = re.compile(r"\.(npz|parquet|safetensors|gguf|pt|pth|ckpt|bin|tar|tgz|gz)$", re.I)
+ICON_ALLOW = ("app/web/public/icons/",)
+MAX_BYTES = 1_000_000
+SECRETS = [
+    re.compile(rb"hf_[A-Za-z0-9]{30,}"),
+    re.compile(rb"gh[pousr]_[A-Za-z0-9]{30,}"),
+    re.compile(rb"github_pat_[A-Za-z0-9_]{40,}"),
+    re.compile(rb"AKIA[0-9A-Z]{16}"),
+    re.compile(rb"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(rb'"key"\s*:\s*"[0-9a-f]{32}"'),
+]
+
+
+def staged():
+    out = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"],
+                         capture_output=True, check=True).stdout
+    return [p for p in out.decode().split("\0") if p]
+
+
+def blob(path):
+    return subprocess.run(["git", "show", f":{path}"], capture_output=True, check=True).stdout
+
+
+def problems(path, data):
+    if IMAGE.search(path) and not path.startswith(ICON_ALLOW):
+        yield "image file (dataset tiles must never be committed)"
+    if WEIGHTS.search(path):
+        yield "data or weights file"
+    if len(data) > MAX_BYTES:
+        yield f"larger than {MAX_BYTES} bytes"
+    if path.endswith(".ipynb"):
+        try:
+            cells = json.loads(data).get("cells", [])
+        except ValueError:
+            cells = []
+        if any(c.get("outputs") for c in cells):
+            yield "notebook has outputs (clear them: they may render tiles)"
+    for pat in SECRETS:
+        if pat.search(data):
+            yield f"looks like a secret ({pat.pattern[:20].decode()}...)"
+
+
+def main():
+    bad = [(p, why) for p in staged() for why in problems(p, blob(p))]
+    for p, why in bad:
+        print(f"pre-commit: {p}: {why}", file=sys.stderr)
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
