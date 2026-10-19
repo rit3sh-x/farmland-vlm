@@ -261,7 +261,7 @@ def test_report_tables_from_runs(tmp_path):
             rows_ = predict(_EchoReader(items, fixed), items, lambda r: None, batch=8)
             write(rows_, summarise(rows_), tmp_path / name / f"f{f}", field_of)
     t1 = table_ablation(tmp_path)
-    assert [r["model"] for r in t1] == ["Zero-shot BLIP", "BLIP-LoRA"] and t1[1]["presence"][1] == 0.0
+    assert [r["model"] for r in t1] == ["Zero-shot BLIP", "BLIP-LoRA"] and t1[1]["presence"][1] == pytest.approx(0.0, abs=1e-12)
     assert table_per_class(tmp_path)["baseline"]["drydown"]["n_present"] >= 0
     t3 = table_fold0(tmp_path)
     assert t3[1]["diff"][0] == pytest.approx(0.0)
