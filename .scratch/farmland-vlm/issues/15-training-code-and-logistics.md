@@ -47,7 +47,7 @@ CONTEXT.md, project3.md, .scratch/ (planning; prototype tiles and node_modules e
   - scans for secrets (`hf_…`, GitHub tokens)
 
 **Weights and checkpoints**
-- One **private HF Hub model repo**, `rit3sh-x/farmvlm-runs`. Colab pushes to it:
+- One **private HF Hub model repo**, `DarkSlayer16/farmvlm-runs`. Colab pushes to it:
   - every 5k-pair checkpoint (adapter + optimizer + scheduler + RNG + step)
   - final adapters plus their GGUF LoRA
   - run records and the stats file

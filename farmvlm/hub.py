@@ -6,7 +6,7 @@ it every call is a no-op and runs stay on the VM.
 import os
 from pathlib import Path
 
-REPO = os.environ.get("FARMVLM_HF_REPO", "rit3sh-x/farmvlm-runs")
+REPO = os.environ.get("FARMVLM_HF_REPO", "DarkSlayer16/farmvlm-runs")
 RUNS = Path(os.environ.get("FARMVLM_RUNS", "/content/runs"))
 
 
