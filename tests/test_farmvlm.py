@@ -280,3 +280,9 @@ def test_finding_confidence_uses_only_its_tokens():
     assert rows[0]["conf"] == pytest.approx(math.exp(-0.1), abs=1e-3)
     assert rows[1]["conf"] == pytest.approx(math.exp(-1.0), abs=1e-3) and rows[1]["possibly"] and rows[1]["hedge"]
     assert rows[0]["extent"] == "large" and rows[0]["loc"] == "centre"
+
+
+def test_scores_on_empty_inputs():
+    from farmvlm.metrics import caption_facts, vqa_scores
+    assert vqa_scores([], [])["accuracy"] is None
+    assert caption_facts([], [])["f1"] == 0.0

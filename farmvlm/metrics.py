@@ -39,9 +39,12 @@ def vqa_credit(item: Item, pred: str) -> float:
 
 
 def vqa_scores(items: list[Item], preds: list[str]) -> dict:
-    credit = np.array([vqa_credit(i, p) for i, p in zip(items, preds)])
-    amb = np.array([i.ambiguous for i in items])
-    hedged = np.array([is_hedge(p) for p in preds])
+    if not items:
+        return {"accuracy": None, "by_family": {}, "ambiguous_credit": None, "clear_accuracy": None,
+                "hedge_rate_ambiguous": None, "hedge_rate_clear": None}
+    credit = np.array([vqa_credit(i, p) for i, p in zip(items, preds)], float)
+    amb = np.array([i.ambiguous for i in items], bool)
+    hedged = np.array([is_hedge(p) for p in preds], bool)
     by_family = defaultdict(list)
     for i, c in zip(items, credit):
         by_family[i.family].append(c)
