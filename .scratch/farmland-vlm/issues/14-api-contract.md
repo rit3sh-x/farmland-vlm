@@ -88,3 +88,9 @@ Locked with the user on 2026-10-19.
 - `/api/field` gains a `weather` event: `{daily: [{date, rain_mm, tmax_c, soil_wetness}], normals: {month: rain_mm_per_day}}`, from NASA POWER. `season` keeps NDVI only; the UI overlays soil wetness from `weather`.
 - The backend fills `scene` from Planetary Computer, `season` from titiler-cmr and `weather` from NASA POWER. It fetches and caches the NDVI PNG and serves it at `/api/field/s2/{key}.png`, so showcase boxes work offline.
 - Photon's CORS is verified, so the browser calls it directly. The `/api/geocode` fallback is not needed.
+
+**Week-1 check results, 2026-10-19**
+- **Prompt cache.** LFM2.5-VL and Qwen3.5 are hybrid recurrent models. llama.cpp reuses their cache only for an identical prompt: a different question after the same tile gave `cache_n` 1 of 161, while the same question repeated gave 157 of 161. So each follow-up re-encodes the tile. That costs about 0.9 s for LFM2.5-VL-450M at 144 image tokens, and about 3.8 s for Qwen3.5-2B (est. from the feasibility check). The bake-off's laptop-speed rule already prices this in.
+- **Photon CORS:** verified.
+- **`colab upload`:** ~1.3 MB/s.
+- **Per-request LoRA switching:** not yet tested. It needs a trained adapter, so it waits for the first served-model run.

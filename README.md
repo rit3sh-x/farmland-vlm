@@ -18,9 +18,11 @@ The data is streamed from the official link on every Colab session by `scripts/f
 
 | Path | Contents |
 |---|---|
-| `farmvlm/` | The package: QA scheme vocabulary, mask statistics, QA items and their text, field-grouped folds, the balanced sampler |
-| `scripts/` | Colab session setup and data fetch |
-| `tests/` | `pytest` checks on synthetic masks |
+| `farmvlm/` | The package: QA scheme, mask statistics, QA items and text, field-grouped folds, balanced sampler, BLIP and VLM training and reading, evaluation, heatmaps, report tables |
+| `scripts/` | Colab session setup and data fetch, the GPU pipeline, evaluators, bake-off, GGUF export, laptop setup |
+| `app/backend/` | FastAPI demo backend: one model queue, NDJSON streams, field context from hosted APIs |
+| `app/web/` | React + Vite "Map + chat" UI on MapLibre and OpenFreeMap |
+| `tests/` | `pytest` checks on synthetic masks and runs |
 
 ## Running
 
@@ -30,8 +32,19 @@ On a fresh Colab VM, this clones the code, installs it, streams the dataset and 
 curl -sL https://raw.githubusercontent.com/rit3sh-x/farmland-vlm/main/scripts/session_setup.py | python3 -
 ```
 
-Locally:
+Then every GPU run of the project, in schedule order, resumable through a private HF Hub repo:
 
 ```sh
-uv venv && uv pip install -e ".[dev]" && .venv/bin/python -m pytest -q
+HF_TOKEN=... python scripts/pipeline.py --stats /content/stats.npz --root /content/av/Agriculture-Vision-2021
 ```
+
+Tests and the demo, locally:
+
+```sh
+uv venv && uv pip install -e ".[dev,app]" && .venv/bin/python -m pytest -q
+HF_TOKEN=$(cat ~/.config/farmvlm/hf_token) .venv/bin/python scripts/laptop_setup.py --served lfm-450m
+(cd app/web && npm install && npm run build)
+.venv/bin/uvicorn app.backend.main:app --host 127.0.0.1 --port 8000   # then open http://127.0.0.1:8000
+```
+
+Demo tiles (`data/demo_tiles/`) come from `scripts/make_demo_tiles.py` on Colab and stay private.

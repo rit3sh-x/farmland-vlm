@@ -233,3 +233,36 @@ def test_question_family_matches_every_template():
             got = question_family(q)
             assert got[0] == fam, q
             assert got[1] == (-1 if fam == "identify" else WEED), q
+
+
+class _EchoReader:
+    """Answers with the truth (or a fixed word), for exercising the evaluation and report plumbing."""
+    def __init__(self, items, fixed=None):
+        self.truth = {(i.row, i.family, i.cls): i for i in items}
+        self.fixed, self.queue = fixed, []
+
+    def answer(self, images, questions):
+        return [(self.fixed or "yes", 0.9) for _ in questions]
+
+    def caption(self, images):
+        return [("Large drydown in the centre.", 0.8) for _ in images]
+
+
+def test_report_tables_from_runs(tmp_path):
+    from farmvlm.evaluate import predict, summarise, write
+    from farmvlm.evalset import eval_items
+    from farmvlm.report import table_ablation, table_fold0, table_hedging, table_per_class
+    t = synthetic_table()
+    items = eval_items(t, np.arange(12), np.array([], int))
+    field_of = lambda r: str(t.field[t.row_tile[r]])
+    for name, fixed in (("baseline", "no"), ("blip-lora", "yes"), ("served-rgb-eval", "yes")):
+        (tmp_path / name).mkdir()
+        for f in range(5 if name != "served-rgb-eval" else 1):
+            rows_ = predict(_EchoReader(items, fixed), items, lambda r: None, batch=8)
+            write(rows_, summarise(rows_), tmp_path / name / f"f{f}", field_of)
+    t1 = table_ablation(tmp_path)
+    assert [r["model"] for r in t1] == ["Zero-shot BLIP", "BLIP-LoRA"] and t1[1]["presence"][1] == 0.0
+    assert table_per_class(tmp_path)["baseline"]["drydown"]["n_present"] >= 0
+    t3 = table_fold0(tmp_path)
+    assert t3[1]["diff"][0] == pytest.approx(0.0)
+    assert {r["model"] for r in table_hedging(tmp_path)} == {"baseline", "blip-lora", "served-rgb-eval"}
