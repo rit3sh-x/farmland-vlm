@@ -104,6 +104,10 @@ def main():
                 train_blip(f"blip-{t}-f{f}", a, t, fold=f, rank=c["rank"], lr=c["lr"], targets=c["targets"], pairs=120_000)
         evaluate("blip-lora", a, "eval_blip.py", "--vqa-adapter", RUNS / "blip-vqa-f{fold}" / "best",
                  "--caption-adapter", RUNS / "blip-caption-f{fold}" / "best")
+    if want("heatmaps") and not fetch("heatmaps", "pointing.json"):
+        sh(sys.executable, CODE / "scripts" / "heatmaps.py", "--stats", a.stats, "--root", a.root,
+           "--adapter", RUNS / "blip-vqa-f0" / "best", "--out", RUNS / "heatmaps")
+        hub.push(RUNS / "heatmaps", "heatmaps")
     if want("served"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
         extra = ["--vision"] if b["merged_route"] else []

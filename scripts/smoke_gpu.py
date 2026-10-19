@@ -57,6 +57,10 @@ def main():
         print(f"SMOKE blip-zero-shot {i.family:9s} truth={i.answer!r:28s} pred={r['pred']!r} ranked={r.get('ranked')!r} conf={r['conf']:.2f}")
     m = summarise(rows, ranked=True)
     print("SMOKE blip-zero-shot summary", json.dumps({k: m[k]["accuracy"] for k in ("vqa_generated", "vqa_ranked")}))
+    from farmvlm.heatmap import BlipAttention, mask_grid, pointing
+    i = next(x for x in items if x.family == "presence" and x.answer == "yes")
+    h = BlipAttention().heat(image(i.row), "Is there something here?")
+    print("SMOKE heatmap", h.shape, float(h.max()), pointing(h, mask_grid(np.ones((384, 384), bool), 24)))
 
 
 if __name__ == "__main__":
