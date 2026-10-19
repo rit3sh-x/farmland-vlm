@@ -197,9 +197,13 @@ def test_eval_items_cover_every_family():
     clean = clean_views(t, tiles, seed=0, n=5)
     items = eval_items(t, tiles, clean)
     full_rows = np.flatnonzero(np.isin(t.row_tile, tiles) & (t.row_view == 0))
-    expect = sum(N_CLASSES + 2 + 2 * int((t.area[r] > 0).sum()) for r in full_rows) + len(clean) * (N_CLASSES + 2)
+    n = lambda r: int((t.area[r] > 0).sum())
+    expect = sum(n(r) + min(N_CLASSES - n(r), max(1, n(r))) + 2 + 2 * n(r) for r in full_rows) + len(clean) * 3
     assert len(items) == expect
     assert {i.answer for i in items if i.family == "identify" and i.row in set(clean)} == {"none"}
+    said_no = [i.answer == "no" for i in items if i.family == "presence" and i.row not in set(clean)]
+    assert 0.4 <= np.mean(said_no) <= 0.6
+    assert [(i.row, i.cls) for i in eval_items(t, tiles, clean)] == [(i.row, i.cls) for i in items]
 
 
 @pytest.mark.parametrize("kind,np_op", [("hflip", np.fliplr), ("rot90", np.rot90)])

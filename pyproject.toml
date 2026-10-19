@@ -3,7 +3,7 @@ name = "farmvlm"
 version = "0.1.0"
 description = "LoRA-fine-tuned captioning and VQA for crop anomalies in Agriculture-Vision tiles (AI 512 Project 3)"
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.26", "pillow>=10", "scikit-learn>=1.4"]
+dependencies = ["numpy>=1.26", "pillow>=10", "scikit-learn==1.6.1"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

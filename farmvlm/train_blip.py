@@ -139,13 +139,13 @@ def main():
     reader = BlipReader(vqa=model if a.task == "vqa" else None, captioner=model if a.task == "caption" else None, load=False)
     image = lambda r: rgb_view(a.root, t.split[t.row_tile[r]], t.tile[t.row_tile[r]], VIEWS[t.row_view[r]])
     key = "vqa_generated" if a.task == "vqa" else "caption_facts"
-    field = "accuracy" if a.task == "vqa" else "f1"
 
     def validate():
+        """Mean accuracy over question families (as the served VLM's loop), so no family's item count dominates."""
         m = summarise(predict(reader, val_items, image))[key]
         with open(a.out / "val.jsonl", "a") as f:
             f.write(json.dumps(m) + "\n")
-        return m[field]
+        return float(np.mean(list(m["by_family"].values()))) if a.task == "vqa" else m["f1"]
 
     cfg = {k: str(v) if isinstance(v, Path) else v for k, v in vars(a).items()}
     cfg.update(train_tiles=int(len(train_tiles)), val_items=len(val_items),
