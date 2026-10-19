@@ -140,7 +140,13 @@ def main():
     image = lambda r: rgb_view(a.root, t.split[t.row_tile[r]], t.tile[t.row_tile[r]], VIEWS[t.row_view[r]])
     key = "vqa_generated" if a.task == "vqa" else "caption_facts"
     field = "accuracy" if a.task == "vqa" else "f1"
-    validate = lambda: summarise(predict(reader, val_items, image))[key][field]
+
+    def validate():
+        m = summarise(predict(reader, val_items, image))[key]
+        with open(a.out / "val.jsonl", "a") as f:
+            f.write(json.dumps(m) + "\n")
+        return m[field]
+
     cfg = {k: str(v) if isinstance(v, Path) else v for k, v in vars(a).items()}
     cfg.update(train_tiles=int(len(train_tiles)), val_items=len(val_items),
                trainable=sum(p.numel() for p in model.parameters() if p.requires_grad))
