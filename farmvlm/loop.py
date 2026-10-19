@@ -22,6 +22,7 @@ class LoopConfig:
     eval_every: int = 5000
     patience: int = 3
     resume: Path | None = None
+    on_checkpoint: object = None  # called after each checkpoint is written (e.g. push to the Hub)
 
 
 def run(model, batches, loss_fn, validate, cfg: LoopConfig):
@@ -73,10 +74,14 @@ def run(model, batches, loss_fn, validate, cfg: LoopConfig):
         model.save_pretrained(cfg.out / "last")
         torch.save({"opt": opt.state_dict(), "sched": sched.state_dict(), "scaler": scaler.state_dict(), "state": state},
                    cfg.out / "last" / "train_state.pt")
+        if cfg.on_checkpoint:
+            cfg.on_checkpoint()
         if skipped > 0.05 * cfg.eval_every / cfg.batch:
             print("loss-scale overflows above 5% of steps: rerun with half the LR from last/", flush=True)
         skipped = 0
         if state["since_best"] >= cfg.patience:
             break
     (cfg.out / "done.json").write_text(json.dumps({"best_val": state["best"], "pairs": state["step"] * cfg.batch}))
+    if cfg.on_checkpoint:
+        cfg.on_checkpoint()
     return state

@@ -12,7 +12,7 @@ import torch
 from peft import LoraConfig, PeftModel, get_peft_model
 from torch.utils.data import DataLoader, IterableDataset, get_worker_info
 
-from farmvlm import loop, vlm
+from farmvlm import hub, loop, vlm
 from farmvlm.evalset import eval_items
 from farmvlm.evaluate import predict, summarise
 from farmvlm.images import ndvi_view, rgb_view
@@ -101,11 +101,12 @@ def main():
     cfg.update(model_id=vlm.MODELS[a.model], micro_batch=micro, train_tiles=int(len(train_tiles)),
                val_items=len(val_items), trainable=sum(p.numel() for p in model.parameters() if p.requires_grad))
     (a.out / "config.json").write_text(json.dumps(cfg, indent=1))
-    dl = DataLoader(Draws(t, a.root, train_tiles, a.seed, a.ndvi), batch_size=micro, num_workers=2,
+    dl = DataLoader(Draws(t, a.root, train_tiles, a.seed + (7919 if a.resume else 0), a.ndvi), batch_size=micro, num_workers=2,
                     collate_fn=lambda b: b, prefetch_factor=4)
     loop.run(model, dl, loss_fn, validate,
              loop.LoopConfig(out=a.out, pairs=a.pairs, batch=a.batch, accum=max(1, a.batch // micro), lr=a.lr,
-                             eval_every=a.eval_every, patience=a.patience, resume=a.resume))
+                             eval_every=a.eval_every, patience=a.patience, resume=a.resume,
+                             on_checkpoint=lambda: hub.push(a.out, hub.name_of(a.out))))
     proc.save_pretrained(a.out / "best")
 
 
