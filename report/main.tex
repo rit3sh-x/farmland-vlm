@@ -1,0 +1,47 @@
+\documentclass[10pt,twocolumn]{article}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{booktabs,graphicx,amsmath,hyperref,xcolor}
+\title{Teaching a Vision--Language Model to Read Crop Anomalies:\\LoRA-Fine-Tuned BLIP and a Laptop-Served VLM on Agriculture-Vision}
+\author{AI 512, Project 3 --- IIT Ropar}
+\date{\today}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We fine-tune BLIP with LoRA to caption and answer questions about crop anomalies in Agriculture-Vision aerial tiles, using QA pairs and captions generated from the anomaly masks, and compare it with zero-shot BLIP under field-grouped dynamic cross-validation. We test hedging on mask-defined ambiguous cases, robustness to paraphrases and image perturbations, and show that the dataset's official split leaks fields between train and validation. A newer small VLM, chosen by a bake-off and also trained with an RGB + NDVI input, is served on a laptop CPU behind a map-and-chat interface.
+\end{abstract}
+
+\section{Introduction}
+% Problem, why masks-to-language, contributions (graded core + leakage study + NDVI comparison + heatmaps + laptop serving).
+
+\section{Data and QA generation}
+% Agriculture-Vision 2021 supervised release; per-view mask statistics; question families; extent cut points (10\% / 35\%, rounded tertiles);
+% location grid; ambiguity flags and hedged targets; quadrant views for clean examples; balanced sampler.
+
+\section{Method}
+% BLIP base (caption + VQA), LoRA placement; the one-knob-at-a-time sweep (rank, LR, targets) on inner validation;
+% the served model bake-off (LFM2.5-VL-450M / 1.6B, Qwen3.5-2B); the NDVI variant; fp16 training details.
+
+\section{Evaluation protocol}
+% 5-fold StratifiedGroupKFold on fields, seeded and regenerated per run; inner validation; test samples; metrics; bootstrap.
+
+\section{Results}
+\subsection{Zero-shot vs LoRA}
+\begin{table*}[t]\centering\small
+\input{tables/ablation.tex}
+\caption{Graded ablation, mean $\pm$ std over 5 field-grouped folds. VQA accuracy per question family (ranked readout in brackets) and caption metrics against all reference phrasings.}
+\end{table*}
+\subsection{Choosing rank, target modules and learning rate}
+\subsection{Hedging on ambiguous cases}
+\subsection{Robustness}
+\subsection{How much does the official split leak?}
+\subsection{Where does the model look?}
+\subsection{The served model and the NDVI comparison}
+
+\section{System}
+% FastAPI + llama.cpp on a laptop CPU, hosted satellite context (Planetary Computer, NASA titiler-cmr, NASA POWER), the Map + chat UI.
+
+\section{Limitations}
+% RGB-only BLIP; extent as the only severity proxy; template captions; uncalibrated NIR; satellite context is not model input; single-fold served rows.
+
+\end{document}
