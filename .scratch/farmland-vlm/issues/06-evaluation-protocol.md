@@ -115,3 +115,8 @@ Figures:
 New results:
 - Table 8: leakage gap.
 - Figures: risk–coverage curves, heatmap grid.
+
+### Amendment (2026-10-19, after the first sweep runs)
+
+- Inner validation scores the mean accuracy over question families (caption models: caption fact F1), for BLIP and the served model alike. Pooled accuracy let presence, the most numerous family, decide checkpoint choice.
+- Presence balance is enforced at item level: each view asks every class it contains plus as many absent classes (at least one), seeded on the row. The first baseline was re-scored onto this subset from its saved predictions.
