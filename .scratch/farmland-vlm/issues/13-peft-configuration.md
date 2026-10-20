@@ -87,3 +87,9 @@ Locked with the user on 2026-10-19. Glossary term added to [CONTEXT.md](../../..
 | Eval | ~5 |
 
 **Note, 2026-10-19:** weights travel through a private HF Hub repo (see [Training code layout and data logistics](15-training-code-and-logistics.md)), so the merged-GGUF route stays practical and the vision-test rule above stands.
+
+### Amendment (2026-10-20, after the bake-off)
+
+- Sweep winners: BLIP VQA r=64, LR 5e-4, `attn_qv` (0.574 mean family accuracy vs 0.17 zero-shot); BLIP caption r=64, LR 2e-4, `all_linear` (fact F1 0.525 vs 0). Full scores in each `sweep-*/choice.json` on the runs repo.
+- Bake-off: Qwen3.5-2B 0.560, LFM2.5-VL-1.6B 0.535, LFM2.5-VL-450M 0.469; Qwen wins by more than the 2-point margin. Vision tower +0.016, under the 2-point bar, so runtime adapters stay.
+- Qwen3.5-2B trains at ~146 min per 10k pairs on a T4 (bake-off log), not the 8.5 h per 75k first estimated. Each served run is cut from 60k to 30k pairs (3x the bake-off budget, early stopping unchanged) to keep the whole schedule near 60 GPU-hours.

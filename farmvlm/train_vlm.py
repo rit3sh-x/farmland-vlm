@@ -58,7 +58,7 @@ def main():
     ap.add_argument("--vision", action="store_true", help="also adapt the vision tower (vision test)")
     ap.add_argument("--rank", type=int, default=16)
     ap.add_argument("--lr", type=float, default=1e-4)
-    ap.add_argument("--pairs", type=int, default=60_000)
+    ap.add_argument("--pairs", type=int, default=30_000)
     ap.add_argument("--batch", type=int, default=16, help="effective batch (micro-batch x accumulation)")
     ap.add_argument("--eval-every", type=int, default=5000)
     ap.add_argument("--patience", type=int, default=3)

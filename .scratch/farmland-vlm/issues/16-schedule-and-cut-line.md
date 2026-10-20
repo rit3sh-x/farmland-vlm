@@ -89,3 +89,8 @@ GPU need: ~6–12 h/week in W2–W6, ~35–45 GPU-h in total (est.). Colab free 
 8. served-model fine-tune; the demo then serves BLIP-LoRA
 
 **Never cut:** the graded core, plus the leakage study and the risk–coverage curve, which are cheap and AI-central.
+
+### Amendment (2026-10-20)
+
+- Colab's free GPU allowance ran out on 2026-10-20; the pipeline now also runs on Kaggle (30 GPU-h/week, T4), started from the notebook editor because Kaggle gives secrets only to editor-started runs. Both platforms resume from the private HF runs repo, and only one runs the pipeline at a time.
+- Order changed so graded work lands first: BLIP folds and their evaluation, BLIP robustness, heatmaps, leakage, DoRA, then the served model and its export, with served-model robustness last.
