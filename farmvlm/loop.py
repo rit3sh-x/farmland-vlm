@@ -1,7 +1,8 @@
 """The fine-tuning loop shared by BLIP and the served VLM (issues/13-peft-configuration.md, "Every final run").
 
 fp16 autocast with a capped initial loss scale, gradient clipping, cosine schedule with 3% warmup,
-inner-validation every eval_every pairs, best/last adapters, resumable state, early stopping.
+inner-validation every eval_every pairs, best/last adapters, resumable state, early stopping in the
+second half (validation swings while the cosine LR is near its peak).
 """
 import json
 import math
@@ -79,7 +80,7 @@ def run(model, batches, loss_fn, validate, cfg: LoopConfig):
         if skipped > 0.05 * cfg.eval_every / cfg.batch:
             print("loss-scale overflows above 5% of steps: rerun with half the LR from last/", flush=True)
         skipped = 0
-        if state["since_best"] >= cfg.patience:
+        if state["since_best"] >= cfg.patience and pairs >= cfg.pairs // 2:  # first half runs at near-peak LR
             break
     (cfg.out / "done.json").write_text(json.dumps({"best_val": state["best"], "pairs": state["step"] * cfg.batch}))
     if cfg.on_checkpoint:
