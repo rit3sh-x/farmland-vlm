@@ -18,6 +18,10 @@ RUNS = Path("/content/runs")
 CODE = Path(__file__).resolve().parent.parent
 SWEEP = {"rank": [4, 8, 16, 32, 64], "lr": [5e-5, 1e-4, 2e-4, 5e-4], "targets": ["text_attn", "attn_qv", "all_linear"]}
 START = {"rank": 16, "lr": 1e-4, "targets": "attn_qv"}
+# The 10k-pair sweep anneals its LR within 10k pairs; held near 5e-4 for longer, BLIP VQA fold 0 collapsed
+# (identify 0.34 -> 0.00 by 20k pairs). Final runs take the sweep choice with the LR capped here; the sweep
+# scored 2e-4 within a point of 5e-4.
+FINAL_LR_CAP = 2e-4
 SERVED_PAIRS = 30_000  # 3x the bake-off budget: Qwen3.5-2B trains at ~146 min per 10k pairs on a T4
 
 
@@ -92,9 +96,10 @@ def main():
 
     if want("baseline"):
         evaluate("baseline", a, "eval_blip.py")
+    final = lambda c: {**c, "lr": min(c["lr"], FINAL_LR_CAP)}
     best = {}
     if want("sweep") or want("blip"):
-        best = {t: sweep(a, t)["choice"] for t in ("vqa", "caption")}
+        best = {t: final(sweep(a, t)["choice"]) for t in ("vqa", "caption")}
     if want("bakeoff") or want("served"):
         if not fetch("bakeoff", "bakeoff.json"):
             sh(sys.executable, CODE / "scripts" / "bakeoff.py", "--stats", a.stats, "--root", a.root, "--out", RUNS / "bakeoff")
@@ -116,12 +121,12 @@ def main():
            "--adapter", RUNS / "blip-vqa-f0" / "best", "--out", RUNS / "heatmaps")
         hub.push(RUNS / "heatmaps", "heatmaps")
     if want("leakage"):
-        c = best.get("vqa") or json.loads((RUNS / "sweep-vqa" / "choice.json").read_text())["choice"]
+        c = best.get("vqa") or final(json.loads((RUNS / "sweep-vqa" / "choice.json").read_text())["choice"])
         train_blip("leak-vqa-official", a, "vqa", split="official", rank=c["rank"], lr=c["lr"], targets=c["targets"], pairs=120_000)
         evaluate("leakage", a, "eval_blip.py", "--suite", "leakage", "--vqa-adapter", RUNS / "leak-vqa-official" / "best",
                  marker="unseen-field.json")
     if want("dora"):
-        c = best.get("vqa") or json.loads((RUNS / "sweep-vqa" / "choice.json").read_text())["choice"]
+        c = best.get("vqa") or final(json.loads((RUNS / "sweep-vqa" / "choice.json").read_text())["choice"])
         train_blip("blip-vqa-f0-dora", a, "vqa", fold=0, rank=c["rank"], lr=c["lr"], targets=c["targets"], dora=True, pairs=120_000)
         evaluate("dora", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", RUNS / "blip-vqa-f0-dora" / "best",
                  "--caption-adapter", RUNS / "blip-caption-f0" / "best", marker="f0.json")
