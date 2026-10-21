@@ -121,12 +121,12 @@ def main():
            "--adapter", RUNS / "blip-vqa-f0" / "best", "--out", RUNS / "heatmaps")
         hub.push(RUNS / "heatmaps", "heatmaps")
     if want("leakage"):
-        c = best.get("vqa") or final(json.loads((RUNS / "sweep-vqa" / "choice.json").read_text())["choice"])
+        c = best.get("vqa") or final(sweep(a, "vqa")["choice"])
         train_blip("leak-vqa-official", a, "vqa", split="official", rank=c["rank"], lr=c["lr"], targets=c["targets"], pairs=120_000)
         evaluate("leakage", a, "eval_blip.py", "--suite", "leakage", "--vqa-adapter", RUNS / "leak-vqa-official" / "best",
                  marker="unseen-field.json")
     if want("dora"):
-        c = best.get("vqa") or final(json.loads((RUNS / "sweep-vqa" / "choice.json").read_text())["choice"])
+        c = best.get("vqa") or final(sweep(a, "vqa")["choice"])
         train_blip("blip-vqa-f0-dora", a, "vqa", fold=0, rank=c["rank"], lr=c["lr"], targets=c["targets"], dora=True, pairs=120_000)
         evaluate("dora", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", RUNS / "blip-vqa-f0-dora" / "best",
                  "--caption-adapter", RUNS / "blip-caption-f0" / "best", marker="f0.json")
