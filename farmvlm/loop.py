@@ -1,8 +1,9 @@
 """The fine-tuning loop shared by BLIP and the served VLM (issues/13-peft-configuration.md, "Every final run").
 
 fp16 autocast with a capped initial loss scale, gradient clipping, cosine schedule with 3% warmup,
-inner-validation every eval_every pairs, best/last adapters, resumable state, early stopping whose patience
-counts only second-half checks (validation swings while the cosine LR is near its peak).
+inner-validation every eval_every pairs, best/last adapters, resumable state. The best adapter and early
+stopping use second-half checks only: validation swings while the cosine LR is near its peak, so a first-half
+peak is noise (blip-caption-f2 once kept a 5k-pair adapter that named no locations).
 """
 import json
 import math
@@ -67,11 +68,11 @@ def run(model, batches, loss_fn, validate, cfg: LoopConfig):
                "skipped_steps": int(skipped), "minutes": round((time.time() - t0) / 60, 1)}
         log.write(json.dumps(rec) + "\n"); log.flush()
         print(json.dumps(rec), flush=True)
-        if score > state["best"]:
+        if pairs >= cfg.pairs // 2 and score > state["best"]:
             state["best"], state["since_best"] = score, 0
             model.save_pretrained(cfg.out / "best")
-        else:
-            state["since_best"] += pairs >= cfg.pairs // 2
+        elif pairs >= cfg.pairs // 2:
+            state["since_best"] += 1
         model.save_pretrained(cfg.out / "last")
         torch.save({"opt": opt.state_dict(), "sched": sched.state_dict(), "scaler": scaler.state_dict(), "state": state},
                    cfg.out / "last" / "train_state.pt")

@@ -302,7 +302,7 @@ def test_hub_name_of_a_pulled_run_ignores_its_symlink(tmp_path, monkeypatch):
     assert hub.name_of(tmp_path / "runs" / "sweep-vqa" / "r4-lr0.0001-attn_qv") == "sweep-vqa/r4-lr0.0001-attn_qv"
 
 
-def test_early_stop_patience_counts_only_second_half_checks(tmp_path):
+def test_best_and_early_stop_use_only_second_half_checks(tmp_path):
     import torch
 
     from farmvlm import loop
@@ -315,4 +315,4 @@ def test_early_stop_patience_counts_only_second_half_checks(tmp_path):
     scores = iter([.3, .5, .55, .6] + [.58] * 8)  # best at 40 of 120 pairs, as blip-vqa-f4
     state = loop.run(model, iter(lambda: torch.ones(1, 1), None), lambda x: model(x).sum(), lambda: next(scores),
                      loop.LoopConfig(out=tmp_path, pairs=120, batch=1, eval_every=10))
-    assert state["step"] == 80
+    assert state["step"] == 90 and state["best"] == .58 and (tmp_path / "best").exists()
