@@ -1,8 +1,8 @@
 """The fine-tuning loop shared by BLIP and the served VLM (issues/13-peft-configuration.md, "Every final run").
 
 fp16 autocast with a capped initial loss scale, gradient clipping, cosine schedule with 3% warmup,
-inner-validation every eval_every pairs, best/last adapters, resumable state, early stopping in the
-second half (validation swings while the cosine LR is near its peak).
+inner-validation every eval_every pairs, best/last adapters, resumable state, early stopping whose patience
+counts only second-half checks (validation swings while the cosine LR is near its peak).
 """
 import json
 import math
@@ -71,7 +71,7 @@ def run(model, batches, loss_fn, validate, cfg: LoopConfig):
             state["best"], state["since_best"] = score, 0
             model.save_pretrained(cfg.out / "best")
         else:
-            state["since_best"] += 1
+            state["since_best"] += pairs >= cfg.pairs // 2
         model.save_pretrained(cfg.out / "last")
         torch.save({"opt": opt.state_dict(), "sched": sched.state_dict(), "scaler": scaler.state_dict(), "state": state},
                    cfg.out / "last" / "train_state.pt")
@@ -80,7 +80,7 @@ def run(model, batches, loss_fn, validate, cfg: LoopConfig):
         if skipped > 0.05 * cfg.eval_every / cfg.batch:
             print("loss-scale overflows above 5% of steps: rerun with half the LR from last/", flush=True)
         skipped = 0
-        if state["since_best"] >= cfg.patience and pairs >= cfg.pairs // 2:  # first half runs at near-peak LR
+        if state["since_best"] >= cfg.patience:
             break
     (cfg.out / "done.json").write_text(json.dumps({"best_val": state["best"], "pairs": state["step"] * cfg.batch}))
     if cfg.on_checkpoint:

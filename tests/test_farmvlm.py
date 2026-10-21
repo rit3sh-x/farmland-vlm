@@ -300,3 +300,19 @@ def test_hub_name_of_a_pulled_run_ignores_its_symlink(tmp_path, monkeypatch):
     (tmp_path / "runs" / "blip-vqa-f0").symlink_to(cached, target_is_directory=True)
     assert hub.name_of(tmp_path / "runs" / "blip-vqa-f0") == "blip-vqa-f0"
     assert hub.name_of(tmp_path / "runs" / "sweep-vqa" / "r4-lr0.0001-attn_qv") == "sweep-vqa/r4-lr0.0001-attn_qv"
+
+
+def test_early_stop_patience_counts_only_second_half_checks(tmp_path):
+    import torch
+
+    from farmvlm import loop
+
+    class Tiny(torch.nn.Linear):
+        def save_pretrained(self, d):
+            d.mkdir(parents=True, exist_ok=True)
+
+    model = Tiny(1, 1)
+    scores = iter([.3, .5, .55, .6] + [.58] * 8)  # best at 40 of 120 pairs, as blip-vqa-f4
+    state = loop.run(model, iter(lambda: torch.ones(1, 1), None), lambda x: model(x).sum(), lambda: next(scores),
+                     loop.LoopConfig(out=tmp_path, pairs=120, batch=1, eval_every=10))
+    assert state["step"] == 80
