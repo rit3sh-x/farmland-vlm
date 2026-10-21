@@ -290,3 +290,13 @@ def test_scores_on_empty_inputs():
     from farmvlm.metrics import caption_facts, vqa_scores
     assert vqa_scores([], [])["accuracy"] is None
     assert caption_facts([], [])["f1"] == 0.0
+
+
+def test_hub_name_of_a_pulled_run_ignores_its_symlink(tmp_path, monkeypatch):
+    from farmvlm import hub
+    monkeypatch.setattr(hub, "RUNS", tmp_path / "runs")
+    cached = tmp_path / "runs" / ".hub" / "runs" / "blip-vqa-f0"
+    cached.mkdir(parents=True)
+    (tmp_path / "runs" / "blip-vqa-f0").symlink_to(cached, target_is_directory=True)
+    assert hub.name_of(tmp_path / "runs" / "blip-vqa-f0") == "blip-vqa-f0"
+    assert hub.name_of(tmp_path / "runs" / "sweep-vqa" / "r4-lr0.0001-attn_qv") == "sweep-vqa/r4-lr0.0001-attn_qv"

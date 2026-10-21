@@ -11,9 +11,12 @@ RUNS = Path(os.environ.get("FARMVLM_RUNS", "/content/runs"))
 
 
 def name_of(path: Path) -> str:
-    """A run's Hub name: its path under RUNS (e.g. sweep-vqa/r16-lr0.0001-attn_qv)."""
+    """A run's Hub name: its path under RUNS (e.g. sweep-vqa/r16-lr0.0001-attn_qv).
+
+    Symlinks are not followed: a pulled run is a link into RUNS/.hub, and its name is still the link's.
+    """
     try:
-        return str(Path(path).resolve().relative_to(RUNS.resolve()))
+        return str(Path(path).absolute().relative_to(RUNS.absolute()))
     except ValueError:
         return Path(path).name
 
