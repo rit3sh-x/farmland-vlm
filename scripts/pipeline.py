@@ -35,23 +35,27 @@ def sh(*cmd):
     subprocess.run([str(c) for c in cmd], check=True, cwd=CODE)
 
 
-def gpu_count() -> int:
+def visible_gpus() -> list[str]:
+    if os.environ.get("CUDA_VISIBLE_DEVICES"):
+        return os.environ["CUDA_VISIBLE_DEVICES"].split(",")
     try:
-        return subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True).stdout.count("GPU ")
+        n = subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True).stdout.count("GPU ")
     except FileNotFoundError:
-        return 0
+        n = 0
+    return [str(i) for i in range(n)]
 
 
 def sh_parallel(cmds: list[list]):
-    """Each command on its own GPU when the VM has enough (Kaggle's T4 x2), else one after another."""
-    if len(cmds) < 2 or gpu_count() < len(cmds):
+    """Each command on its own visible GPU when there are enough (Kaggle's T4 x2), else one after another."""
+    gpus = visible_gpus()
+    if len(cmds) < 2 or len(gpus) < len(cmds):
         for c in cmds:
             sh(*c)
         return
     procs = []
-    for gpu, c in enumerate(cmds):
+    for gpu, c in zip(gpus, cmds):
         print(f"+ [gpu {gpu}]", " ".join(map(str, c)), flush=True)
-        procs.append(subprocess.Popen([str(x) for x in c], cwd=CODE, env={**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu)}))
+        procs.append(subprocess.Popen([str(x) for x in c], cwd=CODE, env={**os.environ, "CUDA_VISIBLE_DEVICES": gpu}))
     codes = [p.wait() for p in procs]
     if any(codes):
         raise subprocess.CalledProcessError(max(codes), cmds[codes.index(max(codes))])

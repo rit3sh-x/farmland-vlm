@@ -330,13 +330,13 @@ def test_sh_parallel_puts_each_command_on_its_own_gpu(tmp_path, monkeypatch):
     spec.loader.exec_module(pipeline)
     write = "import os, sys; open(sys.argv[1], 'w').write(os.environ.get('CUDA_VISIBLE_DEVICES', '-'))"
     cmds = [[sys.executable, "-c", write, tmp_path / n] for n in ("a", "b")]
-    monkeypatch.setattr(pipeline, "gpu_count", lambda: 2)
+    monkeypatch.setattr(pipeline, "visible_gpus", lambda: ["0", "1"])
     pipeline.sh_parallel(cmds)
     assert [(tmp_path / n).read_text() for n in ("a", "b")] == ["0", "1"]
-    monkeypatch.setattr(pipeline, "gpu_count", lambda: 1)
+    monkeypatch.setattr(pipeline, "visible_gpus", lambda: ["0"])
     monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
     pipeline.sh_parallel(cmds)
     assert [(tmp_path / n).read_text() for n in ("a", "b")] == ["-", "-"]
     with pytest.raises(subprocess.CalledProcessError):
-        monkeypatch.setattr(pipeline, "gpu_count", lambda: 2)
+        monkeypatch.setattr(pipeline, "visible_gpus", lambda: ["0", "1"])
         pipeline.sh_parallel([[sys.executable, "-c", "pass"], [sys.executable, "-c", "raise SystemExit(3)"]])
