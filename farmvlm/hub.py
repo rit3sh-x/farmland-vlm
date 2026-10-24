@@ -4,6 +4,7 @@ The token comes only from the HF_TOKEN environment variable (passed with `colab 
 it every call is a no-op and runs stay on the VM.
 """
 import os
+import time
 from pathlib import Path
 
 REPO = os.environ.get("FARMVLM_HF_REPO", "DarkSlayer16/farmvlm-runs")
@@ -33,10 +34,19 @@ def _api():
 
 
 def push(local: Path, name: str, include=("*.json", "*.jsonl", "*.safetensors", "*.pt", "*.gguf", "*.npz", "*.txt", "*.model")):
+    """Upload a run folder; retried, since several VMs (and Kaggle's two GPUs) commit to the one repo at once."""
     if not enabled() or not Path(local).exists():
         return
-    _api().upload_folder(folder_path=str(local), path_in_repo=f"runs/{name}", repo_id=REPO,
-                         allow_patterns=[f"**/{p}" for p in include] + list(include), commit_message=f"update {name}")
+    for attempt in range(4):
+        try:
+            _api().upload_folder(folder_path=str(local), path_in_repo=f"runs/{name}", repo_id=REPO,
+                                 allow_patterns=[f"**/{p}" for p in include] + list(include), commit_message=f"update {name}")
+            return
+        except Exception as e:
+            if attempt == 3:
+                raise
+            print(f"hub push of {name} failed ({type(e).__name__}); retrying", flush=True)
+            time.sleep(30 * (attempt + 1))
 
 
 def has(name: str, file: str = "done.json") -> bool:

@@ -1,3 +1,5 @@
+import subprocess
+
 import numpy as np
 import pytest
 
@@ -316,3 +318,25 @@ def test_best_and_early_stop_use_only_second_half_checks(tmp_path):
     state = loop.run(model, iter(lambda: torch.ones(1, 1), None), lambda x: model(x).sum(), lambda: next(scores),
                      loop.LoopConfig(out=tmp_path, pairs=120, batch=1, eval_every=10))
     assert state["step"] == 90 and state["best"] == .58 and (tmp_path / "best").exists()
+
+
+def test_sh_parallel_puts_each_command_on_its_own_gpu(tmp_path, monkeypatch):
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location("pipeline", Path(__file__).parent.parent / "scripts" / "pipeline.py")
+    pipeline = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pipeline)
+    write = "import os, sys; open(sys.argv[1], 'w').write(os.environ.get('CUDA_VISIBLE_DEVICES', '-'))"
+    cmds = [[sys.executable, "-c", write, tmp_path / n] for n in ("a", "b")]
+    monkeypatch.setattr(pipeline, "gpu_count", lambda: 2)
+    pipeline.sh_parallel(cmds)
+    assert [(tmp_path / n).read_text() for n in ("a", "b")] == ["0", "1"]
+    monkeypatch.setattr(pipeline, "gpu_count", lambda: 1)
+    monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+    pipeline.sh_parallel(cmds)
+    assert [(tmp_path / n).read_text() for n in ("a", "b")] == ["-", "-"]
+    with pytest.raises(subprocess.CalledProcessError):
+        monkeypatch.setattr(pipeline, "gpu_count", lambda: 2)
+        pipeline.sh_parallel([[sys.executable, "-c", "pass"], [sys.executable, "-c", "raise SystemExit(3)"]])

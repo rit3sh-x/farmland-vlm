@@ -4,9 +4,12 @@ from its last pushed checkpoint.
 
     HF_TOKEN=... python scripts/pipeline.py --stats /content/stats.npz --root /content/av/Agriculture-Vision-2021
     python scripts/pipeline.py ... --only baseline sweep
+
+Stages: baseline sweep bakeoff blip robustness heatmaps leakage dora served export served-robustness.
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -23,11 +26,35 @@ START = {"rank": 16, "lr": 1e-4, "targets": "attn_qv"}
 # scored 2e-4 within a point of 5e-4.
 FINAL_LR_CAP = 2e-4
 SERVED_PAIRS = 30_000  # 3x the bake-off budget: Qwen3.5-2B trains at ~146 min per 10k pairs on a T4
+# Each 924-item validation costs Qwen ~40 min on a T4, as much as 5k pairs of training; first-half checks only log.
+SERVED_EVAL_EVERY = 7_500
 
 
 def sh(*cmd):
     print("+", " ".join(map(str, cmd)), flush=True)
     subprocess.run([str(c) for c in cmd], check=True, cwd=CODE)
+
+
+def gpu_count() -> int:
+    try:
+        return subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True).stdout.count("GPU ")
+    except FileNotFoundError:
+        return 0
+
+
+def sh_parallel(cmds: list[list]):
+    """Each command on its own GPU when the VM has enough (Kaggle's T4 x2), else one after another."""
+    if len(cmds) < 2 or gpu_count() < len(cmds):
+        for c in cmds:
+            sh(*c)
+        return
+    procs = []
+    for gpu, c in enumerate(cmds):
+        print(f"+ [gpu {gpu}]", " ".join(map(str, c)), flush=True)
+        procs.append(subprocess.Popen([str(x) for x in c], cwd=CODE, env={**os.environ, "CUDA_VISIBLE_DEVICES": str(gpu)}))
+    codes = [p.wait() for p in procs]
+    if any(codes):
+        raise subprocess.CalledProcessError(max(codes), cmds[codes.index(max(codes))])
 
 
 def fetch(name: str, marker: str = "done.json") -> bool:
@@ -133,10 +160,11 @@ def main():
     if want("served"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
         extra = ["--vision"] if b["merged_route"] else []
-        for name, flags in (("served-rgb", []), ("served-ndvi", ["--ndvi"])):
-            if not fetch(name):
-                sh(sys.executable, "-m", "farmvlm.train_vlm", "--model", b["winner"], "--stats", a.stats, "--root", a.root,
-                   "--pairs", SERVED_PAIRS, "--out", RUNS / name, *extra, *flags, *resume_args(name))
+        variants = (("served-rgb", []), ("served-ndvi", ["--ndvi"]))
+        sh_parallel([[sys.executable, "-m", "farmvlm.train_vlm", "--model", b["winner"], "--stats", a.stats, "--root", a.root,
+                      "--pairs", SERVED_PAIRS, "--eval-every", SERVED_EVAL_EVERY, "--out", RUNS / name, *extra, *flags,
+                      *resume_args(name)] for name, flags in variants if not fetch(name)])
+        for name, flags in variants:
             evaluate(f"{name}-eval", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / name / "best", *flags, marker="f0.json")
         evaluate("served-zeroshot-eval", a, "eval_vlm.py", "--model", b["winner"], marker="f0.json")
     if want("export"):
@@ -147,7 +175,7 @@ def main():
                 sh(sys.executable, CODE / "scripts" / "export_gguf.py", "--model", b["winner"], "--adapter", RUNS / name / "best",
                    "--out", out, *(["--merged"] if b["merged_route"] else []))
                 hub.push(out, f"export-{name}", include=("*.gguf",))
-    if want("robustness"):
+    if want("served-robustness"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
         for name, flags in (("served-rgb", []), ("served-ndvi", ["--ndvi"])):
             evaluate(f"robust-{name}", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / name / "best",
