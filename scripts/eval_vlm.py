@@ -17,11 +17,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from farmvlm import folds as F, vlm  # noqa: E402
 from farmvlm.evalset import eval_items  # noqa: E402
 from farmvlm.evaluate import predict, summarise, write  # noqa: E402
-from farmvlm.perturb import apply, remap, variants  # noqa: E402
+from farmvlm.perturb import apply, remap  # noqa: E402
 from farmvlm.stats import StatsTable  # noqa: E402
 from farmvlm.train_vlm import view_image  # noqa: E402
 
-ROBUST_TILES = 500
+# Qwen generates ~0.4 s per item on a T4: the first 200 of BLIP's 500 robustness tiles (same seed, so the same
+# items) and the middle strength of each perturbation, instead of BLIP's full 18-pass suite.
+ROBUST_TILES = 200
+ROBUST_VARIANTS = (("noise", 15), ("blur", 2), ("jpeg", 20), ("light", 0.25), ("resolution", 3), ("hflip", None), ("rot90", None))
 
 
 def main():
@@ -65,7 +68,7 @@ def main():
     items = eval_items(t, np.random.default_rng(a.seed).permutation(tiles)[:ROBUST_TILES], np.array([], int))
     run(items, f"f{a.fold}-clean")
     run(items, f"f{a.fold}-paraphrase", heldout=True)
-    for kind, s in variants():
+    for kind, s in ROBUST_VARIANTS:
         def image(row, kind=kind, s=s):
             img = base(row)
             return tuple(apply(i, kind, s, seed=row) for i in img) if isinstance(img, tuple) else apply(img, kind, s, seed=row)

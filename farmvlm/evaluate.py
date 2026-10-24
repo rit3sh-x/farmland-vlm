@@ -56,7 +56,7 @@ def summarise(rows, ranked=False) -> dict:
 
 
 def write(rows, metrics, out: Path, field_of):
-    with open(out.with_suffix(".jsonl"), "w") as fh:
+    with open(out.parent / f"{out.name}.jsonl", "w") as fh:  # not with_suffix: "f0-light-0.1" has a dot
         for r in rows:
             i = r["item"]
             rec = {"row": i.row, "field": field_of(i.row), "family": i.family,
@@ -65,4 +65,4 @@ def write(rows, metrics, out: Path, field_of):
             if i.family == "caption":
                 rec["refs"] = caption_refs(i)
             fh.write(json.dumps(rec) + "\n")
-    out.with_suffix(".json").write_text(json.dumps(metrics, indent=1))
+    (out.parent / f"{out.name}.json").write_text(json.dumps(metrics, indent=1))

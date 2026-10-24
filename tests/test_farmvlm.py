@@ -340,3 +340,11 @@ def test_sh_parallel_puts_each_command_on_its_own_gpu(tmp_path, monkeypatch):
     with pytest.raises(subprocess.CalledProcessError):
         monkeypatch.setattr(pipeline, "visible_gpus", lambda: ["0", "1"])
         pipeline.sh_parallel([[sys.executable, "-c", "pass"], [sys.executable, "-c", "raise SystemExit(3)"]])
+
+
+def test_write_keeps_a_dotted_variant_name(tmp_path):
+    from farmvlm.evaluate import write
+
+    for s in (0.1, 0.25):
+        write([], {"s": s}, tmp_path / f"f0-light-{s}", str)
+    assert sorted(p.name for p in tmp_path.glob("*.json")) == ["f0-light-0.1.json", "f0-light-0.25.json"]
