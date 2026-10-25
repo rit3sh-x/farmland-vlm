@@ -14,6 +14,9 @@ from farmvlm.items import Item
 from farmvlm.scheme import CLASSES, CLASS_INDEX
 
 FAMILIES = ("presence", "identify", "extent", "location")
+FOLD0_ROWS = (("baseline", "Zero-shot BLIP"), ("blip-lora", "BLIP-LoRA"), ("dora", "BLIP-DoRA"),
+              ("served-zeroshot-eval", "Qwen3.5-2B, zero-shot"), ("served-rgb-eval", "Qwen3.5-2B LoRA, RGB"),
+              ("served-ndvi-eval", "Qwen3.5-2B LoRA, RGB + NDVI"))
 
 
 def rows(path: Path) -> list[dict]:
@@ -52,11 +55,26 @@ def table_ablation(runs: Path) -> list[dict]:
             row[fam] = mean_std([m["vqa_generated"]["by_family"].get(fam) for m in ms])
             row[fam + "_ranked"] = mean_std([m.get("vqa_ranked", {}).get("by_family", {}).get(fam) for m in ms])
         row["vqa"] = mean_std([m["vqa_generated"]["accuracy"] for m in ms])
+        row["mean"] = mean_std([np.mean([m["vqa_generated"]["by_family"][f] for f in FAMILIES]) for m in ms])
+        row["mean_ranked"] = mean_std([np.mean([m["vqa_ranked"]["by_family"][f] for f in FAMILIES]) for m in ms if m.get("vqa_ranked")])
         for k in ("bleu1", "bleu4", "rougeL", "cider"):
             row[k] = mean_std([m.get("caption_overlap", {}).get(k) for m in ms])
         row["fact_f1"] = mean_std([m["caption_facts"]["f1"] for m in ms])
         out.append(row)
     return out
+
+
+def table_constant(runs: Path) -> dict:
+    """The best single answer per question type, picked with hindsight on each fold's own test items: the floor to clear."""
+    folds = []
+    for path in sorted((runs / "blip-lora").glob("f[0-4].jsonl")):
+        rs = [r for r in rows(path) if r["family"] != "caption"]
+        fam = {}
+        for f in FAMILIES:
+            its = [item_of(r) for r in rs if r["family"] == f]
+            fam[f] = max(np.mean([vqa_credit(i, a) for i in its]) for a in {i.answer for i in its})
+        folds.append(fam)
+    return {f: mean_std([d[f] for d in folds]) for f in FAMILIES} | {"mean": mean_std([np.mean(list(d.values())) for d in folds])}
 
 
 def table_per_class(runs: Path, names=("baseline", "blip-lora", "served-rgb-eval", "served-ndvi-eval")) -> dict:
@@ -91,16 +109,15 @@ def aligned(runs: Path, a: str, b: str, fold: int = 0):
 def table_fold0(runs: Path) -> list[dict]:
     """Table 3: fold-0 comparison with field-grouped 95% CIs and paired differences against BLIP-LoRA."""
     out = []
-    for name, label in (("blip-lora", "BLIP-LoRA"), ("served-zeroshot-eval", "Served model, zero-shot"),
-                        ("served-rgb-eval", "Served model, RGB"), ("served-ndvi-eval", "Served model, RGB + NDVI")):
+    for name, label in FOLD0_ROWS:
         if not (runs / name / "f0.jsonl").exists():
             continue
-        if name == "blip-lora":
-            ca, _, g = aligned(runs, name, name)
-            out.append({"model": label, "acc": grouped_bootstrap(ca, g), "diff": None})
-            continue
         ca, cb, g = aligned(runs, name, "blip-lora")
-        out.append({"model": label, "acc": grouped_bootstrap(ca, g), "diff": grouped_bootstrap(ca, g, other=cb)})
+        m = json.loads((runs / name / "f0.json").read_text())
+        out.append({"model": label, "acc": grouped_bootstrap(ca, g),
+                    "diff": None if name == "blip-lora" else grouped_bootstrap(ca, g, other=cb),
+                    "by_family": m["vqa_generated"]["by_family"],
+                    "caption": {k: m["caption_facts"][k] for k in ("precision", "recall", "f1")}})
     if (runs / "served-ndvi-eval" / "f0.jsonl").exists() and (runs / "served-rgb-eval" / "f0.jsonl").exists():
         ca, cb, g = aligned(runs, "served-ndvi-eval", "served-rgb-eval")
         out.append({"model": "NDVI minus RGB", "acc": None, "diff": grouped_bootstrap(ca, g, other=cb)})
@@ -155,14 +172,70 @@ def sweep_scores(runs: Path) -> dict:
             if (runs / f"sweep-{t}" / "choice.json").exists()}
 
 
-def latex_ablation(t1: list[dict]) -> str:
-    head = "Model & Presence & Identify & Extent & Location & BLEU-4 & ROUGE-L & CIDEr & Fact F1 \\\\"
+def tabular(cols: str, head: str, body: list[str]) -> str:
+    return f"\\begin{{tabular}}{{{cols}}}\n\\toprule\n{head} \\\\\n\\midrule\n" + "\n".join(b + " \\\\" for b in body) + "\n\\bottomrule\n\\end{tabular}\n"
+
+
+def ci(t, pct=True) -> str:
+    k = 100 if pct else 1
+    return "--" if t is None else f"{t[0] * k:.1f} [{t[1] * k:.1f}, {t[2] * k:.1f}]"
+
+
+def latex_ablation(t1: list[dict], const: dict) -> str:
+    """Table 1: Baseline, the constant-answer floor and BLIP-LoRA over 5 folds."""
     body = []
     for r in t1:
-        fam = [f"{fmt(*r[f])} ({fmt(r[f + '_ranked'][0])})" for f in FAMILIES]
-        cap = [fmt(*r["bleu4"]), fmt(*r["rougeL"]), fmt(*r["cider"], pct=False), fmt(*r["fact_f1"])]
-        body.append(" & ".join([r["model"], *fam, *cap]) + " \\\\")
-    return "\\begin{tabular}{l" + "c" * 8 + "}\n\\toprule\n" + head + "\n\\midrule\n" + "\n".join(body) + "\n\\bottomrule\n\\end{tabular}\n"
+        fam = [f"{fmt(*r[f])} ({fmt(r[f + '_ranked'][0])})" for f in FAMILIES] + [f"{fmt(*r['mean'])} ({fmt(r['mean_ranked'][0])})"]
+        cider = f"{r['cider'][0]:.2f}"
+        body.append(" & ".join([r["model"], *fam, fmt(*r["bleu4"]), fmt(*r["rougeL"]), cider, fmt(*r["fact_f1"])]))
+        if r["model"] == "Zero-shot BLIP" and const:
+            body.append(" & ".join(["Most common answer", *[fmt(*const[f]) for f in FAMILIES], fmt(*const["mean"]), "--", "--", "--", "--"]))
+    head = "Model & Presence & Identify & Extent & Location & Mean & BLEU-4 & ROUGE-L & CIDEr & Fact F1"
+    return tabular("l" + "c" * 9, head, body)
+
+
+def latex_fold0(t3: list[dict]) -> str:
+    """Table 3: every model on the same fold-0 items, field-grouped 95% CIs, paired differences against BLIP-LoRA."""
+    body = []
+    for r in t3:
+        if r["acc"] is None:
+            body.append(f"\\midrule\n{r['model']} & \\multicolumn{{6}}{{c}}{{}} & {ci(r['diff'])} &")
+            continue
+        fam = [f"{100 * r['by_family'][f]:.1f}" for f in FAMILIES]
+        mean = f"{100 * np.mean([r['by_family'][f] for f in FAMILIES]):.1f}"
+        c = r["caption"]
+        body.append(" & ".join([r["model"], *fam, mean, ci(r["acc"]), ci(r["diff"]), f"{100 * c['f1']:.1f} ({100 * c['precision']:.0f}/{100 * c['recall']:.0f})"]))
+    head = "Model & Presence & Identify & Extent & Location & Mean & Pooled acc. [95\\% CI] & $\\Delta$ vs BLIP-LoRA & Fact F1 (P/R)"
+    return tabular("l" + "c" * 8, head, body)
+
+
+def latex_hedging(t4: list[dict]) -> str:
+    labels = dict(FOLD0_ROWS)
+    body = [" & ".join([labels.get(r["model"], r["model"]), f"{100 * r['hedge_amb']:.1f}", f"{100 * r['hedge_clear']:.1f}",
+                        f"{100 * r['credit_amb']:.1f}", f"{100 * r['acc_clear']:.1f}", f"{r['ece']:.3f}", f"{r['aurc']:.3f}",
+                        f"{100 * r['acc_at_80']:.1f}"]) for r in t4]
+    head = "Model & Hedge, amb. & Hedge, clear & Credit, amb. & Acc., clear & ECE & AURC & Acc. at 80\\% cov."
+    return tabular("l" + "c" * 7, head, body)
+
+
+def latex_per_class(t2: dict) -> str:
+    names = [n for n in ("blip-lora", "served-rgb-eval", "served-ndvi-eval") if n in t2]
+    labels = dict(FOLD0_ROWS)
+    body = []
+    for c in CLASSES:
+        n = t2[names[0]][c.key]["n_present"]
+        mark = "$^\\dagger$" if n < 60 else ""
+        body.append(" & ".join([c.name + mark, str(n), *[f"{100 * t2[m][c.key]['f1']:.1f}" for m in names]]))
+    head = "Class & Present & " + " & ".join(labels[m] for m in names)
+    return tabular("lr" + "c" * len(names), head, body)
+
+
+def latex_leakage(t8: dict) -> str:
+    if len(t8) < 2:
+        return "\\emph{Pending: the official-split run is still training.}\n"
+    body = [f"Seen field (in official train) & {ci(t8['seen-field'])}", f"Unseen field & {ci(t8['unseen-field'])}",
+            f"Gap & {100 * (t8['seen-field'][0] - t8['unseen-field'][0]):.1f}"]
+    return tabular("lc", "Official val tiles & Pooled accuracy [95\\% CI]", body)
 
 
 def main():
@@ -175,7 +248,12 @@ def main():
                "hedging": table_hedging(a.runs), "robustness": table_robustness(a.runs), "leakage": table_leakage(a.runs),
                "sweep": sweep_scores(a.runs)}
     (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))
-    (a.out / "ablation.tex").write_text(latex_ablation(results["ablation"]))
+    results["constant"] = table_constant(a.runs)
+    (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))
+    for name, tex in (("ablation", latex_ablation(results["ablation"], results["constant"])), ("fold0", latex_fold0(results["fold0"])),
+                      ("hedging", latex_hedging(results["hedging"])), ("per_class", latex_per_class(results["per_class"])),
+                      ("leakage", latex_leakage(results["leakage"]))):
+        (a.out / f"{name}.tex").write_text(tex)
     print(json.dumps({k: (len(v) if hasattr(v, "__len__") else v) for k, v in results.items()}))
 
 

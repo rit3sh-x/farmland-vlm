@@ -257,7 +257,7 @@ class _EchoReader:
 def test_report_tables_from_runs(tmp_path):
     from farmvlm.evaluate import predict, summarise, write
     from farmvlm.evalset import eval_items
-    from farmvlm.report import table_ablation, table_fold0, table_hedging, table_per_class
+    from farmvlm.report import latex_fold0, table_ablation, table_constant, table_fold0, table_hedging, table_per_class
     t = synthetic_table()
     items = eval_items(t, np.arange(12), np.array([], int))
     field_of = lambda r: str(t.field[t.row_tile[r]])
@@ -269,8 +269,9 @@ def test_report_tables_from_runs(tmp_path):
     t1 = table_ablation(tmp_path)
     assert [r["model"] for r in t1] == ["Zero-shot BLIP", "BLIP-LoRA"] and t1[1]["presence"][1] == pytest.approx(0.0, abs=1e-12)
     assert table_per_class(tmp_path)["baseline"]["drydown"]["n_present"] >= 0
-    t3 = table_fold0(tmp_path)
-    assert t3[1]["diff"][0] == pytest.approx(0.0)
+    t3 = {r["model"]: r for r in table_fold0(tmp_path)}
+    assert t3["BLIP-LoRA"]["diff"] is None and t3["Qwen3.5-2B LoRA, RGB"]["diff"][0] == pytest.approx(0.0)
+    assert "BLIP-LoRA" in latex_fold0(list(t3.values())) and 0 <= table_constant(tmp_path)["mean"][0] <= 1
     assert {r["model"] for r in table_hedging(tmp_path)} == {"baseline", "blip-lora", "served-rgb-eval"}
 
 
