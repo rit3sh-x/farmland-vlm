@@ -29,7 +29,6 @@ TARGETS = {
     "attn_qv": r".*\.(query|value|qkv)$",
     "all_linear": r"^(?!.*\bcls\b).*\.(query|key|value|qkv|projection|dense|fc1|fc2)$",
 }
-TRAIN_TEMPLATES = 5
 
 
 class Draws(IterableDataset):
@@ -50,7 +49,7 @@ class Draws(IterableDataset):
                 refs = caption_refs(item)
                 yield img, "", refs[rng.integers(len(refs))]
             else:
-                yield img, render_question(item, int(rng.integers(TRAIN_TEMPLATES))), item.answer
+                yield img, render_question(item, int(rng.integers(1 << 30))), item.answer
 
 
 def split_tiles(t, how, fold_index, seed):

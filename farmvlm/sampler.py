@@ -7,7 +7,7 @@ quadrant view CLEAN_SHARE of the time.
 import numpy as np
 
 from farmvlm.items import Item, make_item
-from farmvlm.scheme import EXTENT_CUTS, N_CLASSES, VIEWS
+from farmvlm.scheme import EXTENT_CUTS, N_CLASSES, THROUGHOUT, THROUGHOUT_CUT, THROUGHOUT_MARGIN, VIEWS
 from farmvlm.stats import StatsTable
 
 MIXES = {
@@ -16,6 +16,9 @@ MIXES = {
     "blip_caption": {"caption": 1.0},
 }
 CLEAN_SHARE = 0.12
+# Location draws: share whose answer is a grid cell rather than "throughout". In the data 55% of location truths
+# are "throughout"; v1 BLIP learnt that prior and answered it for 68% of the items whose anomaly was localised.
+LOCATION_CELL_SHARE = 0.65
 CLEAN_FAMILIES = ("presence", "identify", "caption")
 FULL = VIEWS.index("full")
 
@@ -36,6 +39,8 @@ class Sampler:
         self.no = [anom[~pres[:, c]] for c in range(N_CLASSES)]
         row_w = (pres * w[None, :]).max(1)
         self.anom, self.anom_p = anom, row_w / row_w.sum()
+        localised = t.cells[anom].astype(np.float32).max(-1) > THROUGHOUT_CUT - THROUGHOUT_MARGIN  # location_of names a cell
+        self.loc = [(anom[pres[:, c] & localised[:, c]], anom[pres[:, c] & ~localised[:, c]]) for c in range(N_CLASSES)]
 
     def _family(self, allowed):
         fams = [f for f in self.mix if f in allowed]
@@ -54,9 +59,17 @@ class Sampler:
                 row, cls = int(r.choice(self.anom, p=self.anom_p)), -1
             else:
                 cls = int(r.choice(N_CLASSES, p=self.class_w))
-                bucket = self.no[cls] if fam == "presence" and r.random() < 0.5 and len(self.no[cls]) else self.yes[cls]
-                row = int(r.choice(bucket))
+                row = int(r.choice(self._rows(fam, cls)))
         return make_item(row, fam, cls, self.t.area[row], self.t.cells[row], self.cuts)
+
+    def _rows(self, fam: str, cls: int) -> np.ndarray:
+        if fam == "presence" and len(self.no[cls]) and self.rng.random() < 0.5:
+            return self.no[cls]
+        if fam == "location":
+            cell, throughout = self.loc[cls]
+            if len(cell) and len(throughout):
+                return cell if self.rng.random() < LOCATION_CELL_SHARE else throughout
+        return self.yes[cls]
 
     def draws(self, n: int) -> list[Item]:
         return [self.draw() for _ in range(n)]

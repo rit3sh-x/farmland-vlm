@@ -20,7 +20,7 @@ from farmvlm.items import caption_refs, render_question
 from farmvlm.sampler import Sampler
 from farmvlm.scheme import VIEWS
 from farmvlm.stats import StatsTable
-from farmvlm.train_blip import TRAIN_TEMPLATES, split_tiles
+from farmvlm.train_blip import split_tiles
 
 
 def view_image(t, root, row, ndvi: bool):
@@ -44,7 +44,7 @@ class Draws(IterableDataset):
                 refs = caption_refs(item)
                 yield img, "", refs[rng.integers(len(refs))]
             else:
-                yield img, render_question(item, int(rng.integers(TRAIN_TEMPLATES))), item.answer
+                yield img, render_question(item, int(rng.integers(1 << 30))), item.answer
 
 
 def main():
