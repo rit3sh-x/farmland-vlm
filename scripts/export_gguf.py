@@ -27,8 +27,9 @@ def sh(cmd):
 
 def tools(binaries: bool):
     if not LCPP.exists():
+        # Not llama.cpp's requirements file: it pins transformers < Qwen3.5 and protobuf 4, which broke every later
+        # stage on the VM. The converter needs only gguf-py (on PYTHONPATH in sh) and what the VM already has.
         sh(f"git clone -q --depth 1 --branch {LCPP_TAG} https://github.com/ggml-org/llama.cpp {LCPP}")
-        sh(f"{sys.executable} -m pip install -q -r {LCPP}/requirements/requirements-convert_hf_to_gguf.txt")
     if binaries and not LBIN.exists():
         sh(f"mkdir -p /content/llamabin && cd /content/llamabin && curl -sL -o lb.zip {LBIN_URL} && unzip -q lb.zip")
         found = next(Path("/content/llamabin").rglob("llama-quantize"))
