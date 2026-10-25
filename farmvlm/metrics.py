@@ -106,12 +106,16 @@ def risk_coverage(conf: np.ndarray, correct: np.ndarray):
     return cov, acc, float(np.mean(1 - acc))
 
 
+def field_resample_means(values: np.ndarray, groups: np.ndarray, n: int = 2000, seed: int = 0) -> np.ndarray:
+    """n means of values, each over whole fields resampled with replacement."""
+    uniq, inv = np.unique(groups, return_inverse=True)
+    sums, counts = np.bincount(inv, values), np.bincount(inv)
+    pick = np.random.default_rng(seed).integers(0, len(uniq), size=(n, len(uniq)))
+    return sums[pick].sum(1) / counts[pick].sum(1)
+
+
 def grouped_bootstrap(values: np.ndarray, groups: np.ndarray, n: int = 2000, seed: int = 0, other: np.ndarray | None = None):
     """95% interval of mean(values), or of mean(values - other) when paired, resampling whole fields."""
     v = values if other is None else values - other
-    uniq, inv = np.unique(groups, return_inverse=True)
-    sums, counts = np.bincount(inv, v), np.bincount(inv)
-    rng = np.random.default_rng(seed)
-    pick = rng.integers(0, len(uniq), size=(n, len(uniq)))
-    stats = sums[pick].sum(1) / counts[pick].sum(1)
+    stats = field_resample_means(v, groups, n, seed)
     return float(v.mean()), float(np.percentile(stats, 2.5)), float(np.percentile(stats, 97.5))

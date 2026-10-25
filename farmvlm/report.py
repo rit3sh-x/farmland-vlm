@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from farmvlm.metrics import ece, grouped_bootstrap, is_hedge, risk_coverage, vqa_credit
+from farmvlm.metrics import ece, field_resample_means, grouped_bootstrap, is_hedge, risk_coverage, vqa_credit
 from farmvlm.items import Item
 from farmvlm.scheme import CLASSES, CLASS_INDEX
 
@@ -158,12 +158,16 @@ def table_robustness(runs: Path) -> dict:
 
 def table_leakage(runs: Path) -> dict:
     """Table 8: one model trained on the official split, scored on seen-field vs unseen-field val tiles."""
-    out = {}
-    for part in ("seen-field", "unseen-field"):
-        rs = rows(runs / "leakage" / f"{part}.jsonl")
+    out, draws = {}, {}
+    for seed, part in enumerate(("seen-field", "unseen-field")):
+        rs = [r for r in rows(runs / "leakage" / f"{part}.jsonl") if r["family"] != "caption"]
         if rs:
-            cr = credits(rs)
-            out[part] = grouped_bootstrap(cr, np.array([r["field"] for r in rs if r["family"] != "caption"]))
+            cr, fields = credits(rs), np.array([r["field"] for r in rs])
+            out[part] = grouped_bootstrap(cr, fields)
+            draws[part] = field_resample_means(cr, fields, seed=seed)
+    if len(draws) == 2:  # the halves hold different fields, so their resamples are independent
+        gap = draws["seen-field"] - draws["unseen-field"]
+        out["gap"] = (out["seen-field"][0] - out["unseen-field"][0], float(np.percentile(gap, 2.5)), float(np.percentile(gap, 97.5)))
     return out
 
 
@@ -231,10 +235,10 @@ def latex_per_class(t2: dict) -> str:
 
 
 def latex_leakage(t8: dict) -> str:
-    if len(t8) < 2:
+    if "gap" not in t8:
         return "\\emph{Pending: the official-split run is still training.}\n"
     body = [f"Seen field (in official train) & {ci(t8['seen-field'])}", f"Unseen field & {ci(t8['unseen-field'])}",
-            f"Gap & {100 * (t8['seen-field'][0] - t8['unseen-field'][0]):.1f}"]
+            f"Seen minus unseen & {ci(t8['gap'])}"]
     return tabular("lc", "Official val tiles & Pooled accuracy [95\\% CI]", body)
 
 

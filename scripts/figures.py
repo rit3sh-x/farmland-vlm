@@ -129,7 +129,7 @@ def robustness(runs: Path, out: Path):
     clean = accuracy(rows(blip / "f0-clean.jsonl"))
     drops = {n: accuracy(rows(blip / f"f0-{n}.jsonl")) - clean for n in names}
     served = [n for n in ("served-rgb", "served-ndvi") if (runs / f"robust-{n}" / "f0-clean.jsonl").exists()]
-    fig, axes = plt.subplots(1, 2 if served else 1, figsize=(6.3, 3.0), squeeze=False)
+    fig, axes = plt.subplots(1, 2 if served else 1, figsize=(6.3, 3.8), squeeze=False)
     ax = axes[0][0]
     order = sorted(names, key=lambda n: drops[n])
     ax.barh(range(len(order)), [drops[n] for n in order], 0.7, color=MODELS["blip-lora"][1])
@@ -144,18 +144,21 @@ def robustness(runs: Path, out: Path):
         shared = sorted(p.name.removesuffix(".jsonl").removeprefix("f0-") for p in (runs / f"robust-{served[0]}").glob("f0-*.jsonl"))
         shared = [n for n in shared if n != "clean"]
         series = [("blip-lora", blip)] + [(f"served-{n.split('-')[1]}-eval", runs / f"robust-{n}") for n in served]
-        y, h = np.arange(len(shared)), 0.8 / len(series)
-        for k, (model, d) in enumerate(series):
-            subset = rows_of[served[0]]
+        subset = rows_of[served[0]]
+        change = {}
+        for model, d in series:
             c = accuracy([r for r in rows(d / "f0-clean.jsonl") if r["row"] in subset])
-            vals = [accuracy([r for r in rows(d / f"f0-{n}.jsonl") if r["row"] in subset]) - c for n in shared]
-            ax.barh(y - 0.4 + h * (k + 0.5), vals, h * 0.88, color=MODELS[model][1], label=MODELS[model][0])
+            change[model] = {n: accuracy([r for r in rows(d / f"f0-{n}.jsonl") if r["row"] in subset]) - c for n in shared}
+        shared = sorted(shared, key=lambda n: change["blip-lora"][n])
+        y, h = np.arange(len(shared)), 0.8 / len(series)
+        for k, (model, _) in enumerate(series):
+            ax.barh(y + 0.4 - h * (k + 0.5), [change[model][n] for n in shared], h * 0.88, color=MODELS[model][1], label=MODELS[model][0])
         ax.set_yticks(y, [perturbation(n) for n in shared])
         ax.axvline(0, color=MUTED, lw=0.8)
         ax.grid(axis="x")
         ax.grid(axis="y", visible=False)
         ax.set_xlabel("Accuracy change from clean (same 200 tiles)")
-        ax.legend(loc="lower left", fontsize=6)
+        ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), fontsize=6)
     fig.tight_layout()
     fig.savefig(out / "robustness.pdf")
     plt.close(fig)
