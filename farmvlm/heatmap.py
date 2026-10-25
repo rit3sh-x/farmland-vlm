@@ -17,6 +17,7 @@ class BlipAttention:
         self.device = device
         self.proc = BlipProcessor.from_pretrained(VQA_ID)
         self.model = (model or BlipForQuestionAnswering.from_pretrained(VQA_ID, attn_implementation="eager")).float().to(device).eval()
+        self.model.requires_grad_(True)  # PEFT's merge_and_unload leaves the weights frozen: no graph to take the attention's gradient
         self.bos = self.model.config.text_config.bos_token_id
 
     def heat(self, image: Image.Image, question: str, answer: str = "yes") -> np.ndarray:
