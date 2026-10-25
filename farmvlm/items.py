@@ -108,15 +108,17 @@ QUESTION_TEMPLATES = {
     ),
 }
 
+# Captions end on their last word. BLIP's caption head cannot emit "." or ":" (base NLL ~13 nats, and LoRA leaves
+# the head frozen), so v1 captions that ended in "." learned "[SEP] after the full stop" and never stopped.
 CAPTION_TEMPLATES = (
-    "{first}{rest}.",
-    "This tile shows {first_l}{rest}.",
-    "Visible here: {first_l}{rest}.",
-    "The field has {first_l}{rest}.",
-    "In this tile there is {first_l}{rest}.",
+    "{first}{rest}",
+    "This tile shows {first_l}{rest}",
+    "Visible here is {first_l}{rest}",
+    "The field has {first_l}{rest}",
+    "In this tile there is {first_l}{rest}",
 )
-CLEAN_CAPTIONS = ("No anomalies visible.", "This tile shows no anomalies.", "Visible here: no anomalies.",
-                  "The field looks clean.", "In this tile there are no anomalies.")
+CLEAN_CAPTIONS = ("No anomalies visible", "This tile shows no anomalies", "Visible here is a field with no anomalies",
+                  "The field looks clean", "In this tile there are no anomalies")
 
 
 def render_question(item: Item, variant: int, heldout: bool = False) -> str:

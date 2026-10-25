@@ -121,6 +121,8 @@ def main():
     ap.add_argument("--stats", required=True)
     ap.add_argument("--root", required=True)
     ap.add_argument("--only", nargs="*")
+    ap.add_argument("--tasks", nargs="*", default=["vqa", "caption"], choices=["vqa", "caption"], help="BLIP tasks to sweep and train")
+    ap.add_argument("--folds", nargs="*", type=int, default=list(range(5)), help="BLIP folds to train")
     a = ap.parse_args()
     RUNS.mkdir(parents=True, exist_ok=True)
     want = lambda s: not a.only or s in a.only
@@ -130,18 +132,19 @@ def main():
     final = lambda c: {**c, "lr": min(c["lr"], FINAL_LR_CAP)}
     best = {}
     if want("sweep") or want("blip"):
-        best = {t: final(sweep(a, t)["choice"]) for t in ("vqa", "caption")}
+        best = {t: final(sweep(a, t)["choice"]) for t in a.tasks}
     if want("bakeoff") or want("served"):
         if not fetch("bakeoff", "bakeoff.json"):
             sh(sys.executable, CODE / "scripts" / "bakeoff.py", "--stats", a.stats, "--root", a.root, "--out", RUNS / "bakeoff")
             hub.push(RUNS / "bakeoff", "bakeoff", include=("bakeoff.json",))
     if want("blip"):
-        for f in range(5):
-            for t in ("vqa", "caption"):
+        for f in a.folds:
+            for t in a.tasks:
                 c = best[t]
                 train_blip(f"blip-{t}-f{f}", a, t, fold=f, rank=c["rank"], lr=c["lr"], targets=c["targets"], pairs=120_000)
-        evaluate("blip-lora", a, "eval_blip.py", "--vqa-adapter", RUNS / "blip-vqa-f{fold}" / "best",
-                 "--caption-adapter", RUNS / "blip-caption-f{fold}" / "best")
+        if len(a.tasks) == 2 and len(a.folds) == 5:  # held-out scoring needs every fold's adapters for both tasks
+            evaluate("blip-lora", a, "eval_blip.py", "--vqa-adapter", RUNS / "blip-vqa-f{fold}" / "best",
+                     "--caption-adapter", RUNS / "blip-caption-f{fold}" / "best")
     if want("robustness"):
         evaluate("robust-baseline", a, "eval_blip.py", "--suite", "robustness", "--folds", 0, marker="f0-rot90-None.json")
         evaluate("robust-blip-lora", a, "eval_blip.py", "--suite", "robustness", "--folds", 0,

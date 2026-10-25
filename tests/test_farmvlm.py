@@ -61,13 +61,16 @@ def test_items_and_text():
     ident = make_item(0, "identify", -1, area, cells)
     assert ident.answer == "drydown, possibly weed cluster" and ident.ambiguous
     refs = caption_refs(make_item(0, "caption", -1, area, cells))
-    assert refs[0] == "Large drydown in the centre, with possibly small weed cluster at the top left."
+    assert refs[0] == "Large drydown in the centre, with possibly small weed cluster at the top left"
     assert len(set(refs)) == 5
     q = make_item(0, "location", WEED, area, cells)
     assert render_question(q, 0) == "Where is the weed cluster?"
     assert "weed" in render_question(q, 1, heldout=True)
     clean = make_item(0, "caption", -1, np.zeros(N_CLASSES), np.zeros((N_CLASSES, 9)))
-    assert caption_refs(clean)[0] == "No anomalies visible."
+    assert caption_refs(clean)[0] == "No anomalies visible"
+    for item in (clean, make_item(0, "caption", -1, area, cells)):
+        for ref in caption_refs(item):
+            assert ref[-1].isalpha() and ":" not in ref, ref  # BLIP's caption head cannot produce "." or ":"
     with pytest.raises(ValueError):
         make_item(0, "extent", STORM, area, cells)
 
