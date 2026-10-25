@@ -1,6 +1,7 @@
 \documentclass[10pt,twocolumn]{article}
 \usepackage[margin=0.75in]{geometry}
 \usepackage{booktabs,graphicx,amsmath,hyperref,xcolor}
+\newcommand{\pending}[1]{\textcolor{red}{[pending: #1]}}
 \title{Teaching a Vision--Language Model to Read Crop Anomalies:\\LoRA-Fine-Tuned BLIP and a Laptop-Served VLM on Agriculture-Vision}
 \author{AI 512, Project 3 --- IIT Ropar}
 \date{\today}
@@ -8,40 +9,140 @@
 \maketitle
 
 \begin{abstract}
-We fine-tune BLIP with LoRA to caption and answer questions about crop anomalies in Agriculture-Vision aerial tiles, using QA pairs and captions generated from the anomaly masks, and compare it with zero-shot BLIP under field-grouped dynamic cross-validation. We test hedging on mask-defined ambiguous cases, robustness to paraphrases and image perturbations, and show that the dataset's official split leaks fields between train and validation. A newer small VLM, chosen by a bake-off and also trained with an RGB + NDVI input, is served on a laptop CPU behind a map-and-chat interface.
+We fine-tune BLIP with LoRA to caption and answer questions about crop anomalies in Agriculture-Vision aerial tiles. The training text is generated from the expert anomaly masks: four closed-vocabulary question types (is an anomaly present, which one, how much area, where) and template captions. Under field-grouped 5-fold cross-validation, BLIP-LoRA reaches 66.8\,$\pm$\,0.8\% mean accuracy over question types on held-out tiles, against 16.4\% for zero-shot BLIP and 42.4\% for the best constant answer per question type; caption fact F1 rises from 0 to 58.3\%. The model never hedges in words on ambiguous cases, but its confidence ranks its answers well: answering only the most confident 80\% lifts the share of fully correct answers from 70.7\% to 80.9\%. It is robust to lighting and flips and fragile to unseen question wording ($-11.3$ points). A learning rate that won a short sweep derailed three of five long runs, which we document. We also train a newer small VLM, Qwen3.5-2B, chosen by a bake-off, with an RGB and an RGB + NDVI input; the NDVI variant is better by 2.2 points (95\% CI 1.1 to 3.2), with gains concentrated on the anomalies that change plant vigour. It is served on a laptop CPU behind a map-and-chat interface.
 \end{abstract}
 
 \section{Introduction}
-% Problem, why masks-to-language, contributions (graded core + leakage study + NDVI comparison + heatmaps + laptop serving).
+Agriculture-Vision~\cite{chiu2020agriculture} labels nine field anomalies in aerial farmland tiles with pixel masks. Masks are precise but not readable by a farmer, who would rather ask ``is there standing water in this field, and where?''. The brief asks for a vision--language model that answers such questions: fine-tune BLIP~\cite{li2022blip} with LoRA~\cite{hu2022lora}, following the GeoChat recipe of adapting a general VLM to remote sensing~\cite{kuckreja2024geochat}, and compare against the zero-shot model.
 
-\section{Data and QA generation}
-% Agriculture-Vision 2021 supervised release; per-view mask statistics; question families; extent cut points (10\% / 35\%, rounded tertiles);
-% location grid; ambiguity flags and hedged targets; quadrant views for clean examples; balanced sampler.
+Our contributions are:
+\begin{itemize}
+\item A deterministic \emph{masks-to-language} generator: per-view mask statistics become balanced question--answer pairs and multi-phrasing captions, with ambiguity flags and hedged targets (\S\ref{sec:data}).
+\item The graded study: zero-shot vs LoRA BLIP under field-grouped dynamic cross-validation, a one-knob-at-a-time sweep that justifies rank, target modules and learning rate, hedging and calibration, and robustness to paraphrases and image perturbations (\S\ref{sec:results}).
+\item Three analyses beyond the brief: how much the official split leaks fields, selective answering (risk--coverage), and gradient-weighted attention maps scored with the pointing game.
+\item A newer VLM chosen by a bake-off, trained with and without an NDVI map, and served on a laptop CPU through llama.cpp with per-request adapter switching (\S\ref{sec:system}).
+\end{itemize}
 
-\section{Method}
-% BLIP base (caption + VQA), LoRA placement; the one-knob-at-a-time sweep (rank, LR, targets) on inner validation;
-% the served model bake-off (LFM2.5-VL-450M / 1.6B, Qwen3.5-2B); the NDVI variant; fp16 training details.
+\section{Data and QA generation}\label{sec:data}
+\paragraph{Tiles.} We use the 2021 supervised release: 94,986 tiles of 512$\times$512 pixels with RGB and NIR bands. The test split is unlabelled, so all experiments use the 75,278 train and validation tiles from 2,116 fields. Besides each full tile we use its four 256$\times$256 quadrants, enlarged to 512 and relabelled from that quadrant's masks; quadrants with no anomaly give the clean examples (every full tile carries at least one anomaly). A view is used if at least half of it lies inside the field boundary.
 
-\section{Evaluation protocol}
-% 5-fold StratifiedGroupKFold on fields, seeded and regenerated per run; inner validation; test samples; metrics; bootstrap.
+\paragraph{Mask statistics.} One streaming pass over the archive records, for each view and class, the class's share of in-field valid pixels and its share in each cell of a 3$\times$3 grid. Classes are counted independently, so overlapping labels count for both. A separate generator turns these statistics into pairs, so cut points can be retuned without re-reading the archive.
 
-\section{Results}
+\paragraph{Question types.} All answers are short and closed-vocabulary:
+\begin{itemize}
+\item \emph{Presence} (``Is there weed cluster in this tile?''): yes / no. Each view asks about every class it contains and as many absent classes, chosen with a per-row seed, so yes and no are balanced.
+\item \emph{Identify}: the classes present, largest first, or \emph{none}; scored as a set.
+\item \emph{Extent}: small / moderate / large, with global cut points at 10\% and 35\% of in-field area (the rounded tertiles, 10.9\% and 37.4\%, of 72,661 full views).
+\item \emph{Location}: the grid cell holding the most mask pixels, or \emph{throughout} when no cell holds 40\% of the mask.
+\end{itemize}
+Counting is excluded because the masks do not separate instances. Each type has about eight hand-written templates: five for training and three, with name synonyms (``weeds'', ``standing water''), held out for the paraphrase test.
+
+\paragraph{Captions.} Every present anomaly, largest first, with its extent and location, in one of 4--5 phrasings (``Large drydown throughout the tile, with a small weed cluster at the top left.''). Training samples one phrasing; BLEU and ROUGE score against all of them. Clean views read ``No anomalies visible.''
+
+\paragraph{Ambiguous cases and hedges.} Ground truth is itself uncertain near the cut points, so we flag a pair as ambiguous when the area is within 12\% (relative) of an extent cut, when a present class covers under 1\% of the field, or when the top grid cell beats the runner-up by under 5 points or sits within 2.5 points of the 40\% \emph{throughout} cut. Flagged pairs train on a hedge: \emph{possibly}, \emph{small to moderate}, \emph{X or Y}.
+
+\paragraph{Sampling.} Each training run draws pairs from a balanced sampler: a fixed mix of question types, class weights $\propto 1/\sqrt{\text{frequency}}$, presence yes/no 50/50 per class, and about 12\% clean quadrant views. Loss is on answer tokens only.
+
+\section{Method}\label{sec:method}
+\paragraph{BLIP-LoRA.} Two checkpoints are adapted separately: \texttt{blip-vqa-base} for questions and \texttt{blip-image-captioning-base} for captions, both at 384 px. The base weights stay frozen in fp16 and the LoRA matrices train in fp32, with dropout 0.05, $\alpha = 2r$, AdamW, effective batch 16, a cosine schedule with 3\% warmup, gradient clipping at 1.0 and a loss scaler started at $2^{12}$.
+
+\paragraph{Choosing rank, targets and learning rate.} On fold 0's inner validation set we change one setting at a time, keeping the best value before the next step: rank $\{4, 8, 16, 32, 64\}$ at LR $10^{-4}$ on attention query/value; then LR $\{5\!\times\!10^{-5}, 10^{-4}, 2\!\times\!10^{-4}, 5\!\times\!10^{-4}\}$; then targets \{text attention only, query/value in every attention layer, every linear layer\}. Each trial trains 10k pairs. The score is the mean accuracy over question types (fact F1 for captions), so the most numerous type cannot decide alone. Figure~\ref{fig:sweep} shows the result: score rises monotonically with rank, the VQA model prefers query/value adapters everywhere and the caption model prefers every linear layer. The sweep picked rank 64 for both, LR $5\!\times\!10^{-4}$ (VQA) and $2\!\times\!10^{-4}$ (captions).
+
+\paragraph{A learning rate that only works for short runs.} The sweep's 10k-pair trials decay the learning rate to zero within the run. Held near $5\!\times\!10^{-4}$ for up to 120k pairs, the VQA model failed in three of five folds (Figure~\ref{fig:lr}): two fell to 0.125, the score of giving one answer to everything, and fold 0 lost every identify answer at 20k pairs and ended at 0.56, against 0.66 at the capped rate. The sweep had scored $2\!\times\!10^{-4}$ within one point of $5\!\times\!10^{-4}$, so final runs cap the learning rate at $2\!\times\!10^{-4}$; no fold collapsed at the cap. We keep this as a finding: a short sweep can select a learning rate that a long run cannot survive.
+
+\paragraph{Final runs and checkpoint choice.} Each fold trains up to 120k pairs and scores its inner validation set every 5k pairs. Validation swings while the learning rate is near its peak, so the best checkpoint and early stopping (patience 3) use second-half checks only. Without this rule one caption fold kept a 5k-pair adapter with the best class F1 but correct locations for 1\% of its findings.
+
+\paragraph{Served model.} The laptop app needs a VLM that runs on a CPU. A bake-off trained three candidates on the same 10k pairs with identical LoRA settings (rank 16, $\alpha$ 32, every linear layer of the language model, LR $10^{-4}$): LFM2.5-VL-450M scored 0.469, LFM2.5-VL-1.6B 0.535 and Qwen3.5-2B 0.560, so Qwen3.5-2B won. Adding LoRA to its vision tower gained only 1.6 points, under our 2-point bar, so adapters stay on the language model and can be swapped per request at serving time. Two variants then train for 30k pairs each: one reads the RGB tile, the other also reads an NDVI map of the same view as a second image, coloured with a fixed ramp. The masks were drawn by annotators who looked at RGB, NIR and NDVI views, and NIR inputs improved the dataset paper's segmentation models~\cite{chiu2020agriculture}, which motivates the second variant.
+
+\section{Evaluation protocol}\label{sec:eval}
+\paragraph{Dynamic cross-validation.} Tiles from one field are highly correlated, so folds group by field: 5-fold \texttt{StratifiedGroupKFold} over the 75,278 tiles, grouped by field and stratified on each tile's rarest class, regenerated from a seed recorded at the start of every run and shared by every model in it. No split file is saved or reused. Each training fold holds out about 10\% of its fields as the inner validation set; test folds are never seen before final scoring.
+
+\paragraph{Test sample.} Per fold, about 2,000 test tiles with at least 50 tiles of every class where available, their applicable pairs, every ambiguous pair, and 300 clean quadrant views: about 11,000 questions and 2,200 captions per fold. BLIP rows use all five folds (mean $\pm$ std); the served model uses fold 0, with 95\% intervals from a bootstrap that resamples whole test fields and paired differences on the same items.
+
+\paragraph{Scoring.} The generated answer is normalised (case, punctuation, articles, plurals) and matched exactly; Identify is matched as a set. For BLIP we also report a ranked readout that picks the most likely answer from the type's fixed list. Captions get BLEU-1/4, ROUGE-L and CIDEr against all phrasings, and \emph{fact} precision, recall and F1: class mentions parsed back out of the caption and compared with the masks. On ambiguous pairs a hedge scores 1, committing to either side 0.5, anything else 0; on clear pairs a hedge is wrong. Confidence is the geometric mean of the answer tokens' probabilities.
+
+\section{Results}\label{sec:results}
 \subsection{Zero-shot vs LoRA}
 \begin{table*}[t]\centering\small
-\input{tables/ablation.tex}
-\caption{Graded ablation, mean $\pm$ std over 5 field-grouped folds. VQA accuracy per question family (ranked readout in brackets) and caption metrics against all reference phrasings.}
+\resizebox{\textwidth}{!}{\input{tables/ablation.tex}}
+\caption{The graded ablation: accuracy (\%) per question type on held-out folds, mean $\pm$ std over 5 field-grouped folds, with the ranked readout in brackets, and caption metrics. \emph{Most common answer} gives the single best answer per question type, picked with hindsight on each fold's test items: the floor any model has to clear.}\label{tab:ablation}
 \end{table*}
-\subsection{Choosing rank, target modules and learning rate}
-\subsection{Hedging on ambiguous cases}
-\subsection{Robustness}
-\subsection{How much does the official split leak?}
-\subsection{Where does the model look?}
-\subsection{The served model and the NDVI comparison}
 
-\section{System}
-% FastAPI + llama.cpp on a laptop CPU, hosted satellite context (Planetary Computer, NASA titiler-cmr, NASA POWER), the Map + chat UI.
+Table~\ref{tab:ablation} is the headline. Zero-shot BLIP answers presence a little above chance and almost never produces an extent or location in our vocabulary; a constant answer beats it on every other type. After fine-tuning, BLIP-LoRA reaches 66.8\% mean accuracy, 24 points above that floor, and the five folds agree to within 0.8 points. The gains are uneven. Presence (+37 over the floor), extent (+25) and identify (+33) are learned well. Location is not: most anomalies are spread out, so \emph{throughout} is right 57\% of the time, and the model beats it by only 2.3 points. Captions go from no correct facts to a fact F1 of 58.3\%, with high recall (92\% on fold 0) and low precision (46\%): the caption model names about two anomalies where the masks hold one. CIDEr stays near zero because every caption shares one small template vocabulary, which CIDEr's document-frequency weighting discounts; fact F1 is the caption metric we rely on.
+
+\begin{figure*}[t]\centering
+\includegraphics[width=\textwidth]{figures/family_bars.pdf}
+\caption{Fold 0, the same 13,004 held-out items for every model. Bars: accuracy per question type; black ticks: the best constant answer.}\label{fig:bars}
+\end{figure*}
+
+\subsection{Choosing rank, target modules and learning rate}
+\begin{figure*}[t]\centering
+\includegraphics[width=\textwidth]{figures/sweep.pdf}
+\caption{The LoRA sweep on fold 0's inner validation set, 10k pairs per trial, one setting at a time.}\label{fig:sweep}
+\end{figure*}
+\begin{figure*}[t]\centering
+\includegraphics[width=\textwidth]{figures/lr_curves.pdf}
+\caption{BLIP VQA validation over training, five folds each. At the sweep's $5\!\times\!10^{-4}$ (red) two folds collapse to a constant answer; at $2\!\times\!10^{-4}$ (blue) every fold trains smoothly. Shaded: the checks eligible for checkpoint choice and early stopping.}\label{fig:lr}
+\end{figure*}
+Rank is the clearest lever (Figure~\ref{fig:sweep}): VQA validation rises from 0.405 at rank 4 to 0.502 at rank 64, captions from 0.258 to 0.423. Learning rate is the second: the models gain 0.11 and 0.14 from $5\!\times\!10^{-5}$ to $2\!\times\!10^{-4}$. The two tasks disagree on targets. Leaving the image encoder frozen (text attention only) costs 4 points on questions and 21 on captions, so the encoder has to adapt to aerial imagery, captions most of all. Adapting every linear layer helps captions (0.525) but hurts questions (0.462), where query/value adapters across all attention layers win (0.574). The final configuration trains 11.8M parameters for VQA and 24.8M for captions.
+
+\subsection{Hedging on ambiguous cases}
+\begin{table*}[t]\centering\small
+\input{tables/hedging.tex}
+\caption{Hedging and calibration on fold 0 (\%, except ECE and AURC). Hedge rates are the share of answers that hedge; credit on ambiguous pairs gives 0.5 for committing to one side. AURC: area under the risk--coverage curve, lower is better.}\label{tab:hedging}
+\end{table*}
+No model hedges in words (Table~\ref{tab:hedging}). Hedged targets are only about a tenth of extent and location pairs and rarer elsewhere, so a committed answer is always the more likely one; on ambiguous pairs fine-tuned BLIP earns 37.8\% partial credit against 74.4\% accuracy on clear ones. The hedging signal lives in the confidence instead (Figure~\ref{fig:rc}). Answering only the most confident 80\% of questions raises BLIP-LoRA's share of fully correct answers from 70.7\% to 80.9\%, and its AURC falls from 0.535 zero-shot to 0.095. The served app therefore reports a confidence with every finding rather than relying on hedged wording.
+
+\begin{figure}[t]\centering
+\includegraphics[width=\columnwidth]{figures/risk_coverage.pdf}
+\caption{Selective answering on fold 0: accuracy on the most confident share of questions.}\label{fig:rc}
+\end{figure}
+
+\subsection{Robustness}
+\begin{figure*}[t]\centering
+\includegraphics[width=\textwidth]{figures/robustness.pdf}
+\caption{Accuracy change from clean on fold 0's 500-tile robustness subset.}\label{fig:robust}
+\end{figure*}
+Fine-tuned BLIP ignores lighting changes and is equivariant to flips and rotations once location answers are remapped (Figure~\ref{fig:robust}). It degrades smoothly with blur, noise and lost resolution, and sharply with heavy JPEG compression ($-14.4$ at quality 10). The largest single drop is question wording: on held-out templates and synonyms it loses 11.3 points, so five training templates per type are too few to make it robust to how a farmer phrases a question. Zero-shot BLIP barely moves under any perturbation, but only because it is near its floor everywhere. \pending{Qwen robustness on the shared 200 tiles.}
+
+\subsection{How much does the official split leak?}
+The official train and validation splits share fields: 480 of 2,116 fields have flights in more than one split. We train one BLIP-LoRA VQA model on the official train split with the final settings and score official validation tiles from fields seen in training against tiles from unseen fields.
+
+\begin{center}\small\input{tables/leakage.tex}\end{center}
+\pending{leakage gap and its reading.}
+
+\subsection{Where does the model look?}
+For ``Is there \emph{X} in this tile?'' on 300 held-out tiles we take BLIP's last text-encoder cross-attention, weight it by the gradient of the answer's log-probability~\cite{selvaraju2017gradcam}, and score the resulting 24$\times$24 map against the class mask. Fine-tuning moves the attention peak inside the anomaly in 48.0\% of cases, against 39.3\% zero-shot and 33.1\% expected by chance (the pointing game~\cite{zhang2018topdown}), and puts 40.6\% of the positive attention energy on the mask, against 34.5\% zero-shot. Fine-tuning taught BLIP to look at the anomaly more often, though far from always.
+
+\subsection{The served model and the NDVI comparison}
+\begin{table*}[t]\centering\small
+\resizebox{\textwidth}{!}{\input{tables/fold0.tex}}
+\caption{Every model on the same fold-0 items (\%): accuracy per question type, pooled accuracy with a field-grouped 95\% interval, the paired difference against BLIP-LoRA, and caption fact F1 with precision and recall. The last row is the paired NDVI minus RGB difference.}\label{tab:fold0}
+\end{table*}
+\begin{table}[t]\centering\small
+\resizebox{\columnwidth}{!}{\input{tables/per_class.tex}}
+\caption{Presence F1 (\%) per class on fold 0. $^\dagger$Under 60 present examples.}\label{tab:perclass}
+\end{table}
+Table~\ref{tab:fold0} puts every model on the same 13,004 items. Zero-shot Qwen3.5-2B scores zero under exact match because it answers in full sentences (``No, there is no endrow visible in this tile\ldots''). After 30k pairs the RGB variant reaches 64.9\% pooled accuracy and the NDVI variant 67.1\%. The NDVI map helps by 2.2 points (95\% CI 1.1 to 3.2) and its gains follow plant physiology (Table~\ref{tab:perclass}): presence F1 rises for nutrient deficiency (+15.4), drydown (+9.9), waterway (+6.9) and endrow (+5.8), the anomalies that change how much a plant reflects in the near infrared, and falls for weed clusters ($-9.8$), which are green vegetation and look like the crop in NDVI.
+
+Qwen matches BLIP-LoRA on identify and location and writes more precise captions (precision 60\% against 46\%), but trails on presence by 14--18 points, which puts it 5.5 points behind overall. It saw about 9k presence questions to BLIP's 41k: one Qwen model learns captions and all four question types from 30k pairs, while each BLIP model specialises and trains up to 120k. The NDVI variant's validation score was still rising when training stopped (0.55, 0.58 and 0.63 at 15k, 22.5k and 30k pairs).
+
+\section{System}\label{sec:system}
+The app runs on a laptop CPU. A FastAPI backend serves the Qwen3.5-2B Q4\_K\_M GGUF through llama.cpp, with the RGB and NDVI adapters (fp16 LoRA GGUFs) selected per request \pending{verify with the trained adapters}, and zero-shot BLIP on CPU for comparison. Images are capped at 144 tokens, the training budget, which brings a cold caption to about 8 s and a follow-up answer to about 6 s. The web interface is a full-screen map with a drag-to-select field box and one chat panel: the user asks about a tile, sees the RGB and NDVI views, and gets a caption, structured findings with confidences, and answers streamed as they are generated. A context panel adds free satellite context for the selected box (Sentinel-2 NDVI from Planetary Computer, the HLS season series from NASA titiler-cmr, weather from NASA POWER); this context is shown to the user and is never model input, because at 10--30 m per pixel it cannot resolve the anomalies.
 
 \section{Limitations}
-% RGB-only BLIP; extent as the only severity proxy; template captions; uncalibrated NIR; satellite context is not model input; single-fold served rows.
+BLIP reads RGB only, while the annotators also saw near infrared. Extent is our only severity signal, and its cut points are global rather than per class. Captions come from templates, so overlap metrics reward template matching. The served-model rows use fold 0 only, and NDVI from these cameras is relative, not calibrated. Location barely beats a constant answer, and paraphrased questions cost 11 points. All training ran on free T4 GPUs, which bounded the served model to 30k pairs.
+
+\section{Conclusion}
+Masks can be turned into language that a small VLM learns to read: LoRA lifts BLIP from below a constant-answer floor to two thirds of questions right on unseen fields, with calibrated confidence that supports abstaining. The learning rate that wins a short sweep can fail a long run, the official split overstates how well a model generalises to new fields, and a near-infrared view helps exactly the anomalies it should.
+
+\begin{thebibliography}{9}\small
+\bibitem{chiu2020agriculture} M.~T. Chiu et al. Agriculture-Vision: A large aerial image database for agricultural pattern analysis. CVPR, 2020.
+\bibitem{li2022blip} J.~Li, D.~Li, C.~Xiong, S.~Hoi. BLIP: Bootstrapping language-image pre-training for unified vision-language understanding and generation. ICML, 2022.
+\bibitem{hu2022lora} E.~J. Hu et al. LoRA: Low-rank adaptation of large language models. ICLR, 2022.
+\bibitem{kuckreja2024geochat} K.~Kuckreja et al. GeoChat: Grounded large vision-language model for remote sensing. CVPR, 2024.
+\bibitem{selvaraju2017gradcam} R.~R. Selvaraju et al. Grad-CAM: Visual explanations from deep networks via gradient-based localization. ICCV, 2017.
+\bibitem{zhang2018topdown} J.~Zhang et al. Top-down neural attention by excitation backprop. IJCV, 2018.
+\end{thebibliography}
 
 \end{document}

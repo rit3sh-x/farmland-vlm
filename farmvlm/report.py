@@ -220,7 +220,7 @@ def latex_hedging(t4: list[dict]) -> str:
 
 def latex_per_class(t2: dict) -> str:
     names = [n for n in ("blip-lora", "served-rgb-eval", "served-ndvi-eval") if n in t2]
-    labels = dict(FOLD0_ROWS)
+    labels = {"blip-lora": "BLIP-LoRA", "served-rgb-eval": "Qwen, RGB", "served-ndvi-eval": "Qwen, RGB + NDVI"}
     body = []
     for c in CLASSES:
         n = t2[names[0]][c.key]["n_present"]
