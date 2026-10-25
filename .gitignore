@@ -1,6 +1,7 @@
 # Agriculture-Vision terms forbid posting the dataset or its derivatives in code repositories.
 data/
-runs/
+runs
+.hubmirror/
 cache/
 *.npz
 *.parquet
