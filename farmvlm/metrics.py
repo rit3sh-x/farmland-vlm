@@ -4,7 +4,7 @@ from collections import defaultdict
 import numpy as np
 
 from farmvlm.items import Item
-from farmvlm.scheme import POSSIBLY
+from farmvlm.scheme import EXTENTS, POSSIBLY
 from farmvlm.text import identify_set, normalise, parse_caption
 
 
@@ -33,9 +33,25 @@ def vqa_credit(item: Item, pred: str) -> float:
         strip = lambda s: frozenset(x.removeprefix(POSSIBLY + " ") for x in s)
         firm = lambda s: frozenset(x for x in s if not x.startswith(POSSIBLY))
         return 0.5 if item.ambiguous and got in (strip(want), firm(want)) else 0.0
-    if p == item.answer:
+    if p == item.answer or (" or " in p and " or " in item.answer and set(p.split(" or ")) == set(item.answer.split(" or "))):
         return 1.0
     return 0.5 if item.ambiguous and p in _sides(item.answer) else 0.0
+
+
+def margin_hedge(family: str, top: str, second: str, p_top: float, p_second: float, delta: float) -> str:
+    """The ranked answer, or the scheme's hedge between the top two candidates when their probabilities are within delta."""
+    if p_top - p_second >= delta:
+        return top
+    pair = {top, second}
+    if family == "presence" and pair == {"yes", "no"}:
+        return POSSIBLY
+    if family == "extent":
+        for a, b in zip(EXTENTS, EXTENTS[1:]):
+            if pair == {a, b}:
+                return f"{a} to {b}"
+    if family == "location" and " or " not in top and " or " not in second:
+        return f"{top} or {second}"
+    return top
 
 
 def vqa_scores(items: list[Item], preds: list[str]) -> dict:

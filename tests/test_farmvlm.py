@@ -375,3 +375,32 @@ def test_question_templates_are_many_disjoint_and_keep_the_evaluation_phrasing()
         assert not set(train) & set(heldout) and len(set(train)) == len(train)
         assert all(("{name}" in q) == (fam != "identify") for q in train)
         assert all("{syn}" in q for q in heldout) or fam == "identify"
+
+
+def test_lenient_answer_reads_sentences_into_the_closed_vocabulary():
+    from farmvlm.text import lenient_answer
+    assert lenient_answer("presence", "No, there is no endrow visible in this tile. The image shows") == "no"
+    assert lenient_answer("presence", "Yes, there is strong evidence of **nutrient deficiency**") == "yes"
+    assert lenient_answer("identify", "The image displays weed clusters and a waterway running") == "waterway, weed cluster"
+    assert lenient_answer("extent", "the waterway covers approximately a small portion") == "small"
+    assert lenient_answer("location", "the green strip in the bottom left corner") == "bottom left"
+    assert lenient_answer("location", "it runs diagonally across the whole tile") == "it runs diagonally across the whole tile"
+
+
+def test_margin_hedge_forms_the_scheme_hedges_and_scores_pairs_unordered():
+    from farmvlm.metrics import margin_hedge, vqa_credit
+    assert margin_hedge("presence", "yes", "no", 0.55, 0.45, 0.2) == "possibly"
+    assert margin_hedge("presence", "yes", "no", 0.9, 0.1, 0.2) == "yes"
+    assert margin_hedge("extent", "moderate", "large", 0.5, 0.4, 0.2) == "moderate to large"
+    assert margin_hedge("extent", "small", "large", 0.5, 0.4, 0.2) == "small"
+    assert margin_hedge("location", "top left", "throughout", 0.5, 0.45, 0.1) == "top left or throughout"
+    item = make_item(0, "location", WEED, *_area_cells_near_tie())
+    assert item.answer.count(" or ") == 1 and item.ambiguous
+    a, b = item.answer.split(" or ")
+    assert vqa_credit(item, f"{b} or {a}") == 1.0 and vqa_credit(item, a) == 0.5
+
+
+def _area_cells_near_tie():
+    area = np.zeros(N_CLASSES); area[WEED] = 0.2
+    cells = np.zeros((N_CLASSES, 9)); cells[WEED, 0] = 0.46; cells[WEED, 8] = 0.44; cells[WEED, 4] = 0.10
+    return area, cells

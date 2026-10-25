@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from farmvlm.metrics import ece, field_resample_means, grouped_bootstrap, is_hedge, risk_coverage, vqa_credit
+from farmvlm.metrics import ece, field_resample_means, grouped_bootstrap, is_hedge, margin_hedge, risk_coverage, vqa_credit
 from farmvlm.items import Item
 from farmvlm.scheme import CLASSES, CLASS_INDEX
 
@@ -171,6 +171,23 @@ def table_leakage(runs: Path) -> dict:
     return out
 
 
+def table_hedge_rule(runs: Path, name: str = "blip-lora", deltas=(0.0, 0.05, 0.1, 0.2, 0.3, 0.4)) -> list[dict]:
+    """Table 4b: hedging from the ranked readout's likelihood margin, swept over the margin (fold 0)."""
+    rs = [r for r in rows(runs / name / "f0.jsonl") if r["family"] != "caption" and r.get("ranked2") is not None]
+    if not rs:
+        return []
+    items = [item_of(r) for r in rs]
+    amb = np.array([i.ambiguous for i in items])
+    out = []
+    for d in deltas:
+        preds = [margin_hedge(r["family"], r["ranked"], r["ranked2"], r["ranked_conf"], r["ranked2_conf"], d) for r in rs]
+        cr = np.array([vqa_credit(i, p) for i, p in zip(items, preds)])
+        hedged = np.array([is_hedge(p) for p in preds])
+        out.append({"delta": d, "hedge_amb": float(hedged[amb].mean()), "hedge_clear": float(hedged[~amb].mean()),
+                    "credit_amb": float(cr[amb].mean()), "acc_clear": float(cr[~amb].mean()), "accuracy": float(cr.mean())})
+    return out
+
+
 def sweep_scores(runs: Path) -> dict:
     return {t: json.loads((runs / f"sweep-{t}" / "choice.json").read_text()) for t in ("vqa", "caption")
             if (runs / f"sweep-{t}" / "choice.json").exists()}
@@ -249,7 +266,8 @@ def main():
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     results = {"ablation": table_ablation(a.runs), "per_class": table_per_class(a.runs), "fold0": table_fold0(a.runs),
-               "hedging": table_hedging(a.runs), "robustness": table_robustness(a.runs), "leakage": table_leakage(a.runs),
+               "hedging": table_hedging(a.runs), "hedge_rule": table_hedge_rule(a.runs), "robustness": table_robustness(a.runs),
+               "leakage": table_leakage(a.runs),
                "sweep": sweep_scores(a.runs)}
     (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))
     results["constant"] = table_constant(a.runs)

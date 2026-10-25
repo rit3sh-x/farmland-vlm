@@ -25,9 +25,12 @@ START = {"rank": 16, "lr": 1e-4, "targets": "attn_qv"}
 # (identify 0.34 -> 0.00 by 20k pairs). Final runs take the sweep choice with the LR capped here; the sweep
 # scored 2e-4 within a point of 5e-4.
 FINAL_LR_CAP = 2e-4
-SERVED_PAIRS = 30_000  # 3x the bake-off budget: Qwen3.5-2B trains at ~146 min per 10k pairs on a T4
-# Each 924-item validation costs Qwen ~40 min on a T4, as much as 5k pairs of training; first-half checks only log.
-SERVED_EVAL_EVERY = 7_500
+SERVED_PAIRS = 30_000  # per cycle: Qwen3.5-2B trains at ~146 min per 10k pairs on a T4
+# Cycle 2 restarts the cosine schedule from cycle 1's best adapter (its validation was still rising at 30k pairs).
+SERVED_CYCLES = 2
+# A served validation costs Qwen ~40 min per 900 items on a T4, as much as 5k pairs of training: 75 tiles, 3 checks.
+SERVED_EVAL_EVERY = 10_000
+SERVED_VAL_TILES = 75
 
 
 def sh(*cmd):
@@ -59,6 +62,14 @@ def sh_parallel(cmds: list[list]):
     codes = [p.wait() for p in procs]
     if any(codes):
         raise subprocess.CalledProcessError(max(codes), cmds[codes.index(max(codes))])
+
+
+SERVED_VARIANTS = (("served-rgb", []), ("served-ndvi", ["--ndvi"]))
+
+
+def served_run(name: str, cycle: int = SERVED_CYCLES) -> str:
+    """Run name of a served variant's training cycle: served-rgb for cycle 1, served-rgb-c2 after."""
+    return name if cycle == 1 else f"{name}-c{cycle}"
 
 
 def fetch(name: str, marker: str = "done.json") -> bool:
@@ -167,25 +178,34 @@ def main():
     if want("served"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
         extra = ["--vision"] if b["merged_route"] else []
-        variants = (("served-rgb", []), ("served-ndvi", ["--ndvi"]))
-        sh_parallel([[sys.executable, "-m", "farmvlm.train_vlm", "--model", b["winner"], "--stats", a.stats, "--root", a.root,
-                      "--pairs", SERVED_PAIRS, "--eval-every", SERVED_EVAL_EVERY, "--out", RUNS / name, *extra, *flags,
-                      *resume_args(name)] for name, flags in variants if not fetch(name)])
-        for name, flags in variants:
-            evaluate(f"{name}-eval", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / name / "best", *flags, marker="f0.json")
+        for cycle in range(1, SERVED_CYCLES + 1):
+            cmds = []
+            for name, flags in SERVED_VARIANTS:
+                run = served_run(name, cycle)
+                if fetch(run):
+                    continue
+                warm = [] if cycle == 1 else ["--resume", hub.pull(served_run(name, cycle - 1), RUNS) / "best"]
+                eval_flags = [] if cycle == 1 else ["--eval-every", SERVED_EVAL_EVERY, "--val-tiles", SERVED_VAL_TILES]
+                cmds.append([sys.executable, "-m", "farmvlm.train_vlm", "--model", b["winner"], "--stats", a.stats, "--root", a.root,
+                             "--pairs", SERVED_PAIRS, *eval_flags, "--out", RUNS / run, *extra, *flags, *(resume_args(run) or warm)])
+            sh_parallel(cmds)
+        for name, flags in SERVED_VARIANTS:
+            evaluate(f"{served_run(name)}-eval", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
+                     *flags, marker="f0.json")
         evaluate("served-zeroshot-eval", a, "eval_vlm.py", "--model", b["winner"], marker="f0.json")
     if want("export"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
-        for name in ("served-rgb", "served-ndvi"):
-            out = RUNS / f"export-{name}"
-            if not fetch(f"export-{name}", "lora-f16.gguf" if not b["merged_route"] else "model-Q4_K_M.gguf"):
-                sh(sys.executable, CODE / "scripts" / "export_gguf.py", "--model", b["winner"], "--adapter", RUNS / name / "best",
+        for name, _ in SERVED_VARIANTS:
+            run = served_run(name)
+            out = RUNS / f"export-{run}"
+            if not fetch(f"export-{run}", "lora-f16.gguf" if not b["merged_route"] else "model-Q4_K_M.gguf"):
+                sh(sys.executable, CODE / "scripts" / "export_gguf.py", "--model", b["winner"], "--adapter", RUNS / run / "best",
                    "--out", out, *(["--merged"] if b["merged_route"] else []))
-                hub.push(out, f"export-{name}", include=("*.gguf",))
+                hub.push(out, f"export-{run}", include=("*.gguf",))
     if want("served-robustness"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
-        for name, flags in (("served-rgb", []), ("served-ndvi", ["--ndvi"])):
-            evaluate(f"robust-{name}", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / name / "best",
+        for name, flags in SERVED_VARIANTS:
+            evaluate(f"robust-{served_run(name)}", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
                      "--suite", "robustness", *flags, marker="f0-rot90-None.json")
 
 

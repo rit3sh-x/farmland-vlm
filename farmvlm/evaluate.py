@@ -34,9 +34,9 @@ def predict(reader, items, image, batch=48, heldout=False, ranked=False):
         imgs = [image(i.row) for i in b]
         qs = [render_question(i, k if heldout else 0, heldout=heldout) for k, i in enumerate(b)]
         gen = reader.answer(imgs, qs)
-        rk = reader.rank(imgs, qs, [cands[i.family] for i in b]) if ranked else [(None, None)] * len(b)
-        rows += [{"item": i, "question": q, "pred": g, "conf": gc, "ranked": r, "ranked_conf": rc}
-                 for i, q, (g, gc), (r, rc) in zip(b, qs, gen, rk)]
+        rk = reader.rank(imgs, qs, [cands[i.family] for i in b]) if ranked else [(None, None, None, None)] * len(b)
+        rows += [{"item": i, "question": q, "pred": g, "conf": gc, "ranked": r, "ranked_conf": rc, "ranked2": r2, "ranked2_conf": rc2}
+                 for i, q, (g, gc), (r, rc, r2, rc2) in zip(b, qs, gen, rk)]
     for b in chunks(caps, batch):
         rows += [{"item": i, "pred": c, "conf": cc} for i, (c, cc) in zip(b, reader.caption([image(i.row) for i in b]))]
     return rows

@@ -61,7 +61,7 @@ class BlipReader:
 
     @torch.no_grad()
     def rank(self, images, questions, candidates: list[list[str]]):
-        """Pick each question's most likely answer from its candidate list."""
+        """Each question's most likely candidate and probability, then the runner-up and its probability."""
         q, qmask = self.question_states(images, questions)
         results = []
         for i, cands in enumerate(candidates):
@@ -75,8 +75,8 @@ class BlipReader:
             lp = logits[:, :-1].float().log_softmax(-1).gather(-1, ids[:, 1:, None])[..., 0]
             seq = (lp * a["attention_mask"][:, 1:]).sum(1)
             p = seq.softmax(0)
-            j = int(p.argmax())
-            results.append((cands[j], float(p[j])))
+            j, j2 = (int(x) for x in p.topk(2).indices)
+            results.append((cands[j], float(p[j]), cands[j2], float(p[j2])))
         return results
 
     @torch.no_grad()

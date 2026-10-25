@@ -83,11 +83,37 @@ def why(answer: str) -> str | None:
 
 
 _FAMILY_CUES = (
-    ("location", ("where", "which part", "which area", "point to", "in which part")),
-    ("extent", ("how much", "how large", "how big", "how extensive", "how widespread", "what share", "small, moderate")),
-    ("identify", ("what anomal", "which anomal", "what field", "list ", "what problems", "which crop issues",
-                  "what is wrong", "name every")),
+    ("location", ("where", "which part", "which area", "which region", "point to", "in which part")),
+    ("extent", ("how much", "how large", "how big", "how extensive", "how widespread", "what share", "small, moderate",
+                "what is the size")),
+    ("identify", ("what anomal", "which anomal", "what field", "which field", "list ", "what problems", "which crop issues",
+                  "what is wrong", "name every", "identify the", "what kinds of anomal")),
 )
+
+
+_YES = re.compile(r"^(yes|yes[,.!]|there (is|are)\b|i can see\b)")
+_NO = re.compile(r"^(no|no[,.!]|there (is|are) no\b|i (can't|cannot|do not|don't) see\b|none\b)")
+
+
+def lenient_answer(family: str, text: str) -> str:
+    """The closed-vocabulary answer a free-text reply amounts to, for models that answer in sentences.
+
+    Presence: a leading yes or no. Identify: every class named, largest first is unknown so alphabetical. Extent: the
+    first extent word. Location: the first grid cell or "throughout". Anything else stays as written (and scores 0).
+    """
+    s = normalise(text)
+    if family == "presence":
+        return "no" if _NO.match(s) else "yes" if _YES.match(s) else text
+    if family == "identify":
+        names = sorted({m.cls for m, _, _ in mention_spans(s)})
+        return ", ".join(CLASSES[c].name for c in names) if names else ("none" if "no anomal" in s or _NO.match(s) else text)
+    if family == "extent":
+        m = re.search(_EXT_RE, s)
+        return m.group(0) if m else text
+    if family == "location":
+        m = re.search(rf"throughout|{_CELL_RE}", s)
+        return m.group(0) if m else text
+    return text
 
 
 def question_family(question: str) -> tuple[str, int]:
