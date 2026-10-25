@@ -11,6 +11,7 @@ import numpy as np
 
 from farmvlm.metrics import ece, field_resample_means, grouped_bootstrap, is_hedge, margin_hedge, risk_coverage, vqa_credit
 from farmvlm.items import Item
+from farmvlm.text import lenient_answer
 from farmvlm.scheme import CLASSES, CLASS_INDEX
 
 FAMILIES = ("presence", "identify", "extent", "location")
@@ -114,9 +115,12 @@ def table_fold0(runs: Path) -> list[dict]:
             continue
         ca, cb, g = aligned(runs, name, "blip-lora")
         m = json.loads((runs / name / "f0.json").read_text())
+        rs = [x for x in rows(runs / name / "f0.jsonl") if x["family"] != "caption"]
+        lenient = {f: float(np.mean([vqa_credit(item_of(x), lenient_answer(f, x["pred"])) for x in rs if x["family"] == f]))
+                   for f in FAMILIES}
         out.append({"model": label, "acc": grouped_bootstrap(ca, g),
                     "diff": None if name == "blip-lora" else grouped_bootstrap(ca, g, other=cb),
-                    "by_family": m["vqa_generated"]["by_family"],
+                    "by_family": m["vqa_generated"]["by_family"], "by_family_lenient": lenient,
                     "caption": {k: m["caption_facts"][k] for k in ("precision", "recall", "f1")}})
     if (runs / "served-ndvi-eval" / "f0.jsonl").exists() and (runs / "served-rgb-eval" / "f0.jsonl").exists():
         ca, cb, g = aligned(runs, "served-ndvi-eval", "served-rgb-eval")
@@ -224,6 +228,9 @@ def latex_fold0(t3: list[dict]) -> str:
             continue
         fam = [f"{100 * r['by_family'][f]:.1f}" for f in FAMILIES]
         mean = f"{100 * np.mean([r['by_family'][f] for f in FAMILIES]):.1f}"
+        lenient = 100 * np.mean([r["by_family_lenient"][f] for f in FAMILIES])
+        if lenient - float(mean) >= 0.5:  # a model that answers in sentences: show what its words amount to
+            mean += f" ({lenient:.1f})"
         c = r["caption"]
         body.append(" & ".join([r["model"], *fam, mean, ci(r["acc"]), ci(r["diff"]), f"{100 * c['f1']:.1f} ({100 * c['precision']:.0f}/{100 * c['recall']:.0f})"]))
     head = "Model & Presence & Identify & Extent & Location & Mean & Pooled acc. [95\\% CI] & $\\Delta$ vs BLIP-LoRA & Fact F1 (P/R)"

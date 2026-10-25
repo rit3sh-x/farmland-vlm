@@ -346,6 +346,12 @@
     "extent": 0.0,
     "location": 0.00048426150121065375
    },
+   "by_family_lenient": {
+    "presence": 0.6005643340857788,
+    "identify": 0.054005400540054004,
+    "extent": 0.0,
+    "location": 0.011864406779661017
+   },
    "caption": {
     "precision": 0.0,
     "recall": 0.0,
@@ -361,6 +367,12 @@
    ],
    "diff": null,
    "by_family": {
+    "presence": 0.904627539503386,
+    "identify": 0.5816831683168316,
+    "extent": 0.6031476997578693,
+    "location": 0.6193704600484261
+   },
+   "by_family_lenient": {
     "presence": 0.904627539503386,
     "identify": 0.5816831683168316,
     "extent": 0.6031476997578693,
@@ -390,6 +402,12 @@
     "extent": 0.5968523002421308,
     "location": 0.6292978208232446
    },
+   "by_family_lenient": {
+    "presence": 0.904627539503386,
+    "identify": 0.5591809180918091,
+    "extent": 0.5968523002421308,
+    "location": 0.6292978208232446
+   },
    "caption": {
     "precision": 0.4591392649903288,
     "recall": 0.9196125907990315,
@@ -413,6 +431,12 @@
     "identify": 0.0,
     "extent": 0.0,
     "location": 0.0
+   },
+   "by_family_lenient": {
+    "presence": 0.4904063205417607,
+    "identify": 0.0,
+    "extent": 0.029055690072639227,
+    "location": 0.048426150121065374
    },
    "caption": {
     "precision": 1.0,
@@ -438,6 +462,12 @@
     "extent": 0.5791767554479419,
     "location": 0.6208232445520581
    },
+   "by_family_lenient": {
+    "presence": 0.7240406320541761,
+    "identify": 0.5884338433843385,
+    "extent": 0.5791767554479419,
+    "location": 0.6208232445520581
+   },
    "caption": {
     "precision": 0.5814910025706941,
     "recall": 0.5476997578692494,
@@ -457,6 +487,12 @@
     -0.040034133536455525
    ],
    "by_family": {
+    "presence": 0.7690744920993228,
+    "identify": 0.5909090909090909,
+    "extent": 0.5869249394673124,
+    "location": 0.6290556900726392
+   },
+   "by_family_lenient": {
     "presence": 0.7690744920993228,
     "identify": 0.5909090909090909,
     "extent": 0.5869249394673124,
@@ -530,6 +566,7 @@
    "acc_at_80": 0.8067246376811594
   }
  ],
+ "hedge_rule": [],
  "robustness": {
   "robust-baseline": {
    "blur-1": 0.003721112416764566,
