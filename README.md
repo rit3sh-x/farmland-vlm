@@ -38,6 +38,22 @@ Then every GPU run of the project, in schedule order, resumable through a privat
 HF_TOKEN=... python scripts/pipeline.py --stats /content/stats.npz --root /content/av/Agriculture-Vision-2021
 ```
 
+Stages, tasks and folds can be chosen, which is how a change is checked on one fold before the rest retrain:
+
+```sh
+python scripts/pipeline.py ... --only sweep blip --tasks caption --folds 0
+```
+
+On Kaggle (two T4s), the notebook cell runs `scripts/kaggle.py`, which starts one pipeline per GPU over the argument groups set in that script; the notebook itself never changes. Finished runs are skipped and interrupted ones resume from their last checkpoint on the Hub, so a stopped session loses at most one checkpoint interval.
+
+The report's tables, figures and headline numbers rebuild from the run records (`runs/` mirrors the Hub repo's json and jsonl files):
+
+```sh
+.venv/bin/python -m farmvlm.report --runs runs --out report/tables     # tables/*.tex, numbers.tex, results.json
+.venv/bin/python scripts/figures.py --runs runs --out report/figures   # charts only, no tile imagery
+(cd report && tectonic -X compile main.tex && tectonic -X compile deck.tex)
+```
+
 Tests and the demo, locally:
 
 ```sh

@@ -1,3 +1,4 @@
+import json
 import subprocess
 
 import numpy as np
@@ -410,3 +411,9 @@ def _area_cells_near_tie():
     area = np.zeros(N_CLASSES); area[WEED] = 0.2
     cells = np.zeros((N_CLASSES, 9)); cells[WEED, 0] = 0.46; cells[WEED, 8] = 0.44; cells[WEED, 4] = 0.10
     return area, cells
+
+
+def test_gpu_minutes_sums_segments_across_resumes(tmp_path):
+    from farmvlm.report import gpu_minutes
+    (tmp_path / "metrics.jsonl").write_text("".join(json.dumps({"minutes": m}) + "\n" for m in (10.0, 20.0, 5.0, 15.0)))
+    assert gpu_minutes(tmp_path) == 35.0

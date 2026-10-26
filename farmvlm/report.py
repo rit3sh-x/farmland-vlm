@@ -192,6 +192,39 @@ def table_hedge_rule(runs: Path, name: str = "blip-lora", deltas=(0.0, 0.05, 0.1
     return out
 
 
+def gpu_minutes(run: Path) -> float:
+    """Training plus validation minutes of a run from its metrics log; the clock restarts at every resume."""
+    total, prev = 0.0, 0.0
+    for m in (x["minutes"] for x in rows(run / "metrics.jsonl")):
+        total += m if m < prev else m - prev
+        prev = m
+    return total
+
+
+COST_GROUPS = (("BLIP VQA LoRA, 5 folds", ["blip-vqa-f[0-4]"]), ("BLIP caption LoRA, 5 folds", ["blip-caption-f[0-4]"]),
+               ("BLIP sweeps, 20 trials", ["sweep-vqa/*", "sweep-caption/*"]), ("Leakage model (official split)", ["leak-vqa-official"]),
+               ("BLIP VQA DoRA, fold 0", ["blip-vqa-f0-dora"]), ("Served bake-off, 4 runs", ["bakeoff/*"]),
+               ("Qwen3.5-2B LoRA, RGB", ["served-rgb", "served-rgb-c*"]), ("Qwen3.5-2B LoRA, RGB + NDVI", ["served-ndvi", "served-ndvi-c*"]))
+
+
+def table_cost(runs: Path) -> list[dict]:
+    """Table 7: trainable parameters and T4 GPU-hours per group of training runs, from their configs and logs."""
+    out = []
+    for label, patterns in COST_GROUPS:
+        dirs = [d for p in patterns for d in sorted(runs.glob(p)) if (d / "metrics.jsonl").exists()]
+        if not dirs:
+            continue
+        trainable = {json.loads((d / "config.json").read_text()).get("trainable") for d in dirs if (d / "config.json").exists()}
+        out.append({"group": label, "runs": len(dirs), "trainable": trainable.pop() if len(trainable) == 1 else None,
+                    "gpu_hours": sum(gpu_minutes(d) for d in dirs) / 60})
+    return out
+
+
+def latex_cost(t7: list[dict]) -> str:
+    body = [" & ".join([r["group"], str(r["runs"]), f"{r['trainable'] / 1e6:.1f}" if r["trainable"] else "--", f"{r['gpu_hours']:.1f}"]) for r in t7]
+    return tabular("lrrr", "Runs & Count & Trainable params (M) & T4 GPU-hours", body)
+
+
 def table_pointing(runs: Path) -> dict:
     """The pointing game: baseline vs BLIP-LoRA hit rate and heat-in-mask energy, with chance."""
     p = runs / "heatmaps" / "pointing.json"
@@ -336,7 +369,7 @@ def main():
     a.out.mkdir(parents=True, exist_ok=True)
     results = {"ablation": table_ablation(a.runs), "per_class": table_per_class(a.runs), "fold0": table_fold0(a.runs),
                "hedging": table_hedging(a.runs), "hedge_rule": table_hedge_rule(a.runs), "robustness": table_robustness(a.runs),
-               "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs),
+               "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs), "cost": table_cost(a.runs),
                "sweep": sweep_scores(a.runs)}
     (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))
     results["constant"] = table_constant(a.runs)
@@ -344,7 +377,7 @@ def main():
     (a.out / "numbers.tex").write_text(latex_numbers(results))
     for name, tex in (("ablation", latex_ablation(results["ablation"], results["constant"])), ("fold0", latex_fold0(results["fold0"])),
                       ("hedging", latex_hedging(results["hedging"])), ("per_class", latex_per_class(results["per_class"])),
-                      ("leakage", latex_leakage(results["leakage"]))):
+                      ("leakage", latex_leakage(results["leakage"])), ("cost", latex_cost(results["cost"]))):
         (a.out / f"{name}.tex").write_text(tex)
     print(json.dumps({k: (len(v) if hasattr(v, "__len__") else v) for k, v in results.items()}))
 

@@ -660,6 +660,56 @@
    "n": 300
   }
  },
+ "cost": [
+  {
+   "group": "BLIP VQA LoRA, 5 folds",
+   "runs": 5,
+   "trainable": 11796480,
+   "gpu_hours": 9.053333333333335
+  },
+  {
+   "group": "BLIP caption LoRA, 5 folds",
+   "runs": 5,
+   "trainable": 24772608,
+   "gpu_hours": 8.016666666666667
+  },
+  {
+   "group": "BLIP sweeps, 20 trials",
+   "runs": 20,
+   "trainable": null,
+   "gpu_hours": 3.3133333333333335
+  },
+  {
+   "group": "Leakage model (official split)",
+   "runs": 1,
+   "trainable": 11796480,
+   "gpu_hours": 2.1600000000000006
+  },
+  {
+   "group": "BLIP VQA DoRA, fold 0",
+   "runs": 1,
+   "trainable": 11897856,
+   "gpu_hours": 2.3883333333333336
+  },
+  {
+   "group": "Served bake-off, 4 runs",
+   "runs": 4,
+   "trainable": null,
+   "gpu_hours": 6.643333333333333
+  },
+  {
+   "group": "Qwen3.5-2B LoRA, RGB",
+   "runs": 1,
+   "trainable": 16819200,
+   "gpu_hours": 7.38
+  },
+  {
+   "group": "Qwen3.5-2B LoRA, RGB + NDVI",
+   "runs": 1,
+   "trainable": 16819200,
+   "gpu_hours": 15.83
+  }
+ ],
  "sweep": {
   "vqa": {
    "choice": {

@@ -1,0 +1,14 @@
+\begin{tabular}{lrrr}
+\toprule
+Runs & Count & Trainable params (M) & T4 GPU-hours \\
+\midrule
+BLIP VQA LoRA, 5 folds & 5 & 11.8 & 9.1 \\
+BLIP caption LoRA, 5 folds & 5 & 24.8 & 8.0 \\
+BLIP sweeps, 20 trials & 20 & -- & 3.3 \\
+Leakage model (official split) & 1 & 11.8 & 2.2 \\
+BLIP VQA DoRA, fold 0 & 1 & 11.9 & 2.4 \\
+Served bake-off, 4 runs & 4 & -- & 6.6 \\
+Qwen3.5-2B LoRA, RGB & 1 & 16.8 & 7.4 \\
+Qwen3.5-2B LoRA, RGB + NDVI & 1 & 16.8 & 15.8 \\
+\bottomrule
+\end{tabular}

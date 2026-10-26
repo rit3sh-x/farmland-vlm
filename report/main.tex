@@ -138,7 +138,13 @@ Table~\ref{tab:fold0} puts every model on the same 13,004 items. Zero-shot Qwen3
 
 Qwen matches BLIP-LoRA on identify and location and writes more precise captions (precision 60\% against 46\%), but trails on presence by 14--18 points, which puts it 5.5 points behind overall. It saw about 9k presence questions to BLIP's 41k: one Qwen model learns captions and all four question types from 30k pairs, while each BLIP model specialises and trains up to 120k. The NDVI variant's validation score was still rising when training stopped (0.55, 0.58 and 0.63 at 15k, 22.5k and 30k pairs).
 
-\section{System}\label{sec:system}
+\section{Cost and system}\label{sec:system}
+\begin{table}[t]\centering\small
+\resizebox{\columnwidth}{!}{\input{tables/cost.tex}}
+\caption{What each group of training runs cost on a free Tesla T4, from the run logs: trainable parameters (``--'' where the group mixes settings) and GPU-hours including validation. Scoring and robustness suites add about 15 GPU-hours.}\label{tab:cost}
+\end{table}
+Table~\ref{tab:cost} is the compute budget: every run of the project fits in about 70 T4 GPU-hours of free Colab and Kaggle time, resumed across session limits through a private Hugging Face repository of checkpoints.
+
 The app runs on a laptop CPU. A FastAPI backend serves the Qwen3.5-2B Q4\_K\_M GGUF through llama.cpp, with both trained adapters (34 MB fp16 LoRA GGUFs each) loaded at start and selected per request, and zero-shot BLIP on CPU for comparison. Images are capped at 144 tokens, the training budget. On the laptop, reading a held-out tile takes about 4 s with the RGB adapter and 7 s with the NDVI adapter, which encodes two images; switching adapters between requests costs nothing, and the same request returns the same caption after a switch. The web interface is a full-screen map with a drag-to-select field box and one chat panel: the user asks about a tile, sees the RGB and NDVI views, and gets a caption, structured findings with confidences, and answers streamed as they are generated. A context panel adds free satellite context for the selected box (Sentinel-2 NDVI from Planetary Computer, the HLS season series from NASA titiler-cmr, weather from NASA POWER); this context is shown to the user and is never model input, because at 10--30 m per pixel it cannot resolve the anomalies.
 
 \section{Limitations}
