@@ -1,18 +1,223 @@
-\documentclass[aspectratio=169]{beamer}
+\documentclass[aspectratio=169,10pt]{beamer}
 \usetheme{default}
-\usepackage{booktabs}
+\usecolortheme{seagull}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\setbeamertemplate{itemize items}[circle]
+\usepackage{booktabs,graphicx}
+\input{tables/numbers.tex}
 \title{Reading crop anomalies with LoRA-tuned vision--language models}
-\subtitle{AI 512 Project 3}
+\subtitle{AI 512, Project 3: BLIP + LoRA on Agriculture-Vision, and a laptop-served VLM}
 \date{\today}
 \begin{document}
 \frame{\titlepage}
-\begin{frame}{From masks to language}\end{frame}
-\begin{frame}{Zero-shot BLIP vs BLIP-LoRA}\centering\small\input{tables/ablation.tex}\end{frame}
-\begin{frame}{Choosing rank, targets and learning rate}\end{frame}
-\begin{frame}{Hedging when the masks are borderline}\end{frame}
-\begin{frame}{Robustness}\end{frame}
-\begin{frame}{The official split leaks}\end{frame}
-\begin{frame}{Where the model looks}\end{frame}
-\begin{frame}{A served model on a laptop CPU}\end{frame}
-\begin{frame}{Limitations and next steps}\end{frame}
+
+\begin{frame}{The task}
+\begin{columns}
+\column{0.55\textwidth}
+\begin{itemize}
+\item Agriculture-Vision: aerial farmland tiles (512 px, about 10 cm/px, RGB + NIR) with expert pixel masks for nine anomalies.
+\item Masks are precise but not readable. A farmer asks: \emph{is there standing water in this field, and where?}
+\item The brief: fine-tune BLIP with LoRA to caption and answer such questions, and compare with zero-shot BLIP.
+\item We add: a leakage test, selective answering, attention heatmaps, and a newer VLM served on a laptop CPU with an NDVI input.
+\end{itemize}
+\column{0.45\textwidth}
+\small
+\begin{tabular}{lr}
+\toprule
+Labelled tiles (train + val) & 75,278 \\
+Fields & 1,741 \\
+Views incl.\ quadrants & 348,124 \\
+Most common class (drydown) & 29.7\% \\
+Rarest class (storm damage) & 0.6\% \\
+Tiles with 2+ anomalies & 6.3\% \\
+\bottomrule
+\end{tabular}
+\end{columns}
+\end{frame}
+
+\begin{frame}{From masks to language}
+One streaming pass turns every tile and quadrant into mask statistics; a generator turns those into text.
+\medskip
+\small
+\begin{tabular}{lll}
+\toprule
+Question type & Example & Answer vocabulary \\
+\midrule
+Presence & Is there weed cluster in this tile? & yes / no, balanced per view \\
+Identify & What anomalies are visible? & class names, largest first, or \emph{none} \\
+Extent & How much of the tile does the drydown cover? & small / moderate / large (cuts at 10\%, 35\%) \\
+Location & Where is the standing water? & a 3$\times$3 cell, or \emph{throughout} \\
+\bottomrule
+\end{tabular}
+
+\medskip
+Caption: ``Large drydown throughout the tile, with small weed cluster at the top left'', in one of five phrasings.
+\medskip
+\begin{itemize}
+\item Ambiguous cases are flagged from the masks (near a cut point, under 1\% area, a near-tie between cells) and train on hedges: \emph{possibly}, \emph{small to moderate}, \emph{top left or centre}.
+\item Clean examples come from anomaly-free quadrants (33,014 views); a balanced sampler up-weights rare classes.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Method}
+\begin{columns}
+\column{0.5\textwidth}
+\textbf{Graded: BLIP + LoRA}
+\begin{itemize}
+\item \texttt{blip-vqa-base} for questions, \texttt{blip-image-captioning-base} for captions, 384 px.
+\item fp16 base, fp32 LoRA, cosine schedule, clipping, loss scaler.
+\item One-knob-at-a-time sweep on fold 0's inner validation: rank, then learning rate, then target modules.
+\item Final: rank 64, LR capped at $2\!\times\!10^{-4}$, up to 120k pairs per fold, early stopping in the second half.
+\end{itemize}
+\column{0.5\textwidth}
+\textbf{Served: a newer VLM for the laptop}
+\begin{itemize}
+\item Bake-off on 10k pairs: Qwen3.5-2B 0.560, LFM2.5-VL-1.6B 0.535, LFM2.5-VL-450M 0.469.
+\item LoRA on the language model only, so adapters switch per request in llama.cpp.
+\item Two variants: RGB, and RGB + an NDVI map as a second image.
+\item Also: DoRA on one fold, and a model trained on the official split for the leakage test.
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Evaluation: dynamic, field-grouped cross-validation}
+\begin{itemize}
+\item Tiles from one field are near-duplicates, so 5-fold \texttt{StratifiedGroupKFold} groups by field and stratifies on the rarest class. Folds are regenerated from a seed recorded per run; no split file is saved.
+\item Each training fold holds out 10\% of its fields as inner validation for checkpoint choice. Test folds are never seen before final scoring.
+\item Per fold about 2,000 test tiles, 11,000 questions and 2,200 captions. BLIP rows: 5 folds, mean $\pm$ std. Served rows: fold 0 with field-bootstrap 95\% intervals and paired differences.
+\item Strict exact match after normalising; a ranked readout over the fixed answer list; caption fact precision/recall/F1 plus BLEU, ROUGE-L and CIDEr.
+\item \textbf{The floor to clear:} the single best answer per question type, chosen with hindsight, scores \constMean\% on average.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Zero-shot BLIP vs BLIP-LoRA}
+\centering
+\resizebox{\textwidth}{!}{\input{tables/ablation.tex}}
+\begin{itemize}
+\item Mean over question types: \zeroMean\% zero-shot, \constMean\% for the best constant answer, \textbf{\blipMean\,$\pm$\,\blipMeanStd\%} after LoRA (ranked readout \blipRanked\%).
+\item Presence \blipPresence\%, identify \blipIdentify\%, extent \blipExtent\%. Location \blipLocation\% barely beats \constLocation\% for always saying \emph{throughout}.
+\item Caption fact F1 from 0 to \blipFactF\%; CIDEr stays near zero because every caption shares one template vocabulary.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Every model on the same held-out items (fold 0)}
+\centering
+\includegraphics[width=0.92\textwidth]{figures/family_bars.pdf}
+\end{frame}
+
+\begin{frame}{Choosing rank, target modules and learning rate}
+\centering
+\includegraphics[width=0.95\textwidth]{figures/sweep.pdf}
+\begin{itemize}
+\item Rank is the clearest lever; learning rate the second. Text-only adapters are not enough: the image encoder must adapt to aerial imagery.
+\item Questions prefer query/value adapters in every attention layer; captions preferred every linear layer (this changed in v2, next slides).
+\end{itemize}
+\end{frame}
+
+\begin{frame}{A learning rate that only works for short runs}
+\centering
+\includegraphics[width=0.9\textwidth]{figures/lr_curves.pdf}
+\begin{itemize}
+\item The 10k-pair sweep picked $5\!\times\!10^{-4}$. Held for 120k pairs it derailed 3 of 5 folds; two collapsed to one answer for everything.
+\item Capped at $2\!\times\!10^{-4}$ (within a point in the sweep) every fold trains smoothly. Checkpoint choice and early stopping use second-half checks only.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Hedging on ambiguous cases, and calibration}
+\begin{columns}
+\column{0.6\textwidth}
+\resizebox{\textwidth}{!}{\input{tables/hedging.tex}}
+\medskip
+\begin{itemize}
+\item No model hedges in words: hedged targets are a tenth of the ambiguous families' pairs, so a committed answer is always likelier.
+\item The signal is in the confidence: answering only the most confident 80\% lifts BLIP-LoRA to \blipAccEighty\% fully correct (AURC \blipAurc, against \zeroAurc\ zero-shot).
+\item v2 adds a rule: hedge when the top two ranked answers are within a margin.
+\end{itemize}
+\column{0.4\textwidth}
+\includegraphics[width=\textwidth]{figures/risk_coverage.pdf}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Robustness: paraphrased questions and perturbed images}
+\centering
+\includegraphics[width=0.95\textwidth]{figures/robustness.pdf}
+\begin{itemize}
+\item Lighting and flips cost nothing; blur, noise and lost resolution degrade smoothly; heavy JPEG costs \blipJpegDrop\ points.
+\item The largest drop is new question wording: \blipParaphraseDrop\ points for BLIP, 4--5 for Qwen, whose language model has met many ways to ask.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Does the official split leak?}
+\begin{columns}
+\column{0.45\textwidth}
+\input{tables/leakage.tex}
+\column{0.55\textwidth}
+\begin{itemize}
+\item 480 of the dataset's fields have flights in both official train and validation.
+\item One BLIP-LoRA trained on official train: validation tiles from seen fields score \leakGap\ points \emph{lower} than unseen fields (95\% CI \leakLo\ to \leakHi).
+\item No detectable inflation: the anomalies change between flights, so having seen a field does not give away its labels.
+\item We still group folds by field: it costs nothing and keeps the comparison honest.
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Where does the model look?}
+\begin{itemize}
+\item Gradient-weighted cross-attention for ``Is there \emph{X} in this tile?'' on 300 held-out tiles, scored against the mask (the pointing game).
+\item Attention peak inside the anomaly: \pointZero\% zero-shot, \textbf{\pointLora\%} after LoRA, \pointChance\% by chance.
+\item Attention energy on the mask: \energyZero\% to \energyLora\%.
+\item Fine-tuning taught BLIP to look at the anomaly more often, though far from always.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{The served model, and does NDVI help?}
+\centering
+\resizebox{\textwidth}{!}{\input{tables/fold0.tex}}
+\begin{itemize}
+\item Qwen3.5-2B after 30k pairs: \qwenRgbMean\% (RGB), \qwenNdviMean\% (RGB + NDVI). It trails BLIP on presence, matches it on identify and location, and its captions are more precise (\qwenNdviPrecision\% vs \blipFoldPrecision\%).
+\item NDVI adds \ndviDiff\ points (95\% CI \ndviLo\ to \ndviHi), concentrated on nutrient deficiency, drydown and waterways: the anomalies that change near-infrared reflectance.
+\item DoRA matches LoRA (\doraDiff\ points) at 29\% more training time.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{On a laptop CPU}
+\begin{columns}
+\column{0.55\textwidth}
+\begin{itemize}
+\item FastAPI backend, llama.cpp serving the Q4 Qwen3.5-2B with both LoRA adapters loaded; the adapter is chosen per request.
+\item Zero-shot BLIP alongside, for a before/after view.
+\item A map with a drag-to-select field box, one chat panel: caption, findings with confidences, answers streamed as generated.
+\item Satellite context (Sentinel-2 NDVI, HLS season series, weather) is shown, never model input.
+\end{itemize}
+\column{0.45\textwidth}
+\small
+\begin{tabular}{lr}
+\toprule
+Read a tile, RGB adapter & about 4 s \\
+Read a tile, NDVI adapter & about 7 s \\
+Switch adapters & free \\
+Model + adapters in RAM & about 3 GB \\
+\bottomrule
+\end{tabular}
+\end{columns}
+\end{frame}
+
+\begin{frame}{v2: what a closer look at the errors found}
+\begin{itemize}
+\item \textbf{Captions never ended.} BLIP's caption head cannot emit a full stop (probability $2\!\times\!10^{-6}$ in the base model), and every target ended in one. The model learned ``end after the full stop'' and rambled: 32 words per caption against 9 in the truth, precision 46\%. Fix: captions end on their last word. Caption fact F1 at 10k pairs: 52.5\% $\to$ 69.3\%; fold 0 at 25k pairs: 76.7\%.
+\item \textbf{Location was the prior.} 55\% of location truths are \emph{throughout}; BLIP-LoRA scored 91\% on those and 24\% on localised anomalies. Fix: balanced location draws in the sampler. Ground truth unchanged.
+\item \textbf{Five phrasings per question were too few.} Now twelve, with the held-out synonym phrasings untouched.
+\item \textbf{Qwen was under-trained:} a second 30k-pair cycle, warm-started.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Limitations and conclusions}
+\begin{itemize}
+\item BLIP reads RGB only while the annotators also saw near infrared; extent is the only severity signal; captions come from templates; served rows use one fold; NDVI from these cameras is relative.
+\item Masks can be turned into language that a small VLM learns to read: LoRA lifts BLIP from below a constant-answer floor to two thirds of questions right on unseen fields, with confidence that supports abstaining.
+\item A learning rate that wins a short sweep can fail a long run; the official split's shared fields turned out harmless; a near-infrared view helps exactly the anomalies it should.
+\item Code: \url{github.com/rit3sh-x/farmland-vlm}. Every table and figure rebuilds from the run records.
+\end{itemize}
+\end{frame}
 \end{document}

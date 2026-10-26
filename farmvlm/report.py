@@ -192,6 +192,68 @@ def table_hedge_rule(runs: Path, name: str = "blip-lora", deltas=(0.0, 0.05, 0.1
     return out
 
 
+def table_pointing(runs: Path) -> dict:
+    """The pointing game: baseline vs BLIP-LoRA hit rate and heat-in-mask energy, with chance."""
+    p = runs / "heatmaps" / "pointing.json"
+    return json.loads(p.read_text())["summary"] if p.exists() else {}
+
+
+def latex_numbers(res: dict) -> str:
+    """\\newcommand macros for the headline numbers, so the deck and the report quote the current run records."""
+    def pct(x):
+        v = f"{100 * x:.1f}"
+        return f"${v}$" if v.startswith("-") else v
+    abl = {r["model"]: r for r in res["ablation"]}
+    f0 = {r["model"]: r for r in res["fold0"]}
+    hed = {r["model"]: r for r in res["hedging"]}
+    rob = res["robustness"].get("robust-blip-lora", {})
+    n = {}
+    if "BLIP-LoRA" in abl:
+        b = abl["BLIP-LoRA"]
+        n.update(blipMean=pct(b["mean"][0]), blipMeanStd=pct(b["mean"][1]), blipFactF=pct(b["fact_f1"][0]),
+                 blipFactFStd=pct(b["fact_f1"][1]), blipPresence=pct(b["presence"][0]), blipIdentify=pct(b["identify"][0]),
+                 blipExtent=pct(b["extent"][0]), blipLocation=pct(b["location"][0]), blipRanked=pct(b["mean_ranked"][0]))
+    if "Zero-shot BLIP" in abl:
+        z = abl["Zero-shot BLIP"]
+        n.update(zeroMean=pct(z["mean"][0]), zeroPresence=pct(z["presence"][0]), zeroIdentify=pct(z["identify"][0]))
+    if res.get("constant"):
+        c = res["constant"]
+        n.update(constMean=pct(c["mean"][0]), constLocation=pct(c["location"][0]), constIdentify=pct(c["identify"][0]))
+    if "blip-lora" in hed:
+        h = hed["blip-lora"]
+        n.update(blipAccEighty=pct(h["acc_at_80"]), blipAurc=f"{h['aurc']:.2f}", blipCreditAmb=pct(h["credit_amb"]),
+                 blipAccClear=pct(h["acc_clear"]), blipEce=f"{h['ece']:.2f}")
+    if "baseline" in hed:
+        n["zeroAurc"] = f"{hed['baseline']['aurc']:.2f}"
+    if rob:
+        n.update(blipParaphraseDrop=pct(-rob["paraphrase"]), blipJpegDrop=pct(-rob.get("jpeg-10", 0.0)),
+                 blipBlurDrop=pct(-rob.get("blur-4", 0.0)))
+    if "gap" in res.get("leakage", {}):
+        g = res["leakage"]["gap"]
+        n.update(leakGap=pct(g[0]), leakLo=pct(g[1]), leakHi=pct(g[2]), leakSeen=pct(res["leakage"]["seen-field"][0]),
+                 leakUnseen=pct(res["leakage"]["unseen-field"][0]))
+    if "NDVI minus RGB" in f0:
+        d = f0["NDVI minus RGB"]["diff"]
+        n.update(ndviDiff=pct(d[0]), ndviLo=pct(d[1]), ndviHi=pct(d[2]))
+    for key, name in (("Qwen3.5-2B LoRA, RGB", "qwenRgb"), ("Qwen3.5-2B LoRA, RGB + NDVI", "qwenNdvi"), ("BLIP-LoRA", "blipFold"),
+                      ("BLIP-DoRA", "dora")):
+        if key in f0:
+            fam = f0[key]["by_family"]
+            n[name + "Mean"] = pct(np.mean([fam[f] for f in FAMILIES]))
+            n[name + "Presence"] = pct(fam["presence"])
+            n[name + "FactF"] = pct(f0[key]["caption"]["f1"])
+            n[name + "Precision"] = pct(f0[key]["caption"]["precision"])
+    if "BLIP-DoRA" in f0 and f0["BLIP-DoRA"]["diff"]:
+        n["doraDiff"] = pct(f0["BLIP-DoRA"]["diff"][0])
+    if "Qwen3.5-2B, zero-shot" in f0:
+        n["qwenZeroLenient"] = pct(np.mean([f0["Qwen3.5-2B, zero-shot"]["by_family_lenient"][f] for f in FAMILIES]))
+    if res.get("pointing"):
+        p = res["pointing"]
+        n.update(pointZero=pct(p["baseline"]["hit_rate"]), pointLora=pct(p["blip-lora"]["hit_rate"]),
+                 pointChance=pct(p["blip-lora"]["chance"]), energyZero=pct(p["baseline"]["energy"]), energyLora=pct(p["blip-lora"]["energy"]))
+    return "".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in n.items())
+
+
 def sweep_scores(runs: Path) -> dict:
     return {t: json.loads((runs / f"sweep-{t}" / "choice.json").read_text()) for t in ("vqa", "caption")
             if (runs / f"sweep-{t}" / "choice.json").exists()}
@@ -274,11 +336,12 @@ def main():
     a.out.mkdir(parents=True, exist_ok=True)
     results = {"ablation": table_ablation(a.runs), "per_class": table_per_class(a.runs), "fold0": table_fold0(a.runs),
                "hedging": table_hedging(a.runs), "hedge_rule": table_hedge_rule(a.runs), "robustness": table_robustness(a.runs),
-               "leakage": table_leakage(a.runs),
+               "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs),
                "sweep": sweep_scores(a.runs)}
     (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))
     results["constant"] = table_constant(a.runs)
     (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))
+    (a.out / "numbers.tex").write_text(latex_numbers(results))
     for name, tex in (("ablation", latex_ablation(results["ablation"], results["constant"])), ("fold0", latex_fold0(results["fold0"])),
                       ("hedging", latex_hedging(results["hedging"])), ("per_class", latex_per_class(results["per_class"])),
                       ("leakage", latex_leakage(results["leakage"]))):
