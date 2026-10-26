@@ -45,9 +45,9 @@ def fmt(m, s=None, pct=True):
 
 
 def table_ablation(runs: Path) -> list[dict]:
-    """Table 1: Baseline vs BLIP-LoRA over 5 folds."""
+    """Table 1: Baseline vs BLIP-LoRA over 5 folds, with the archived v1 BLIP-LoRA row when v2 has replaced it."""
     out = []
-    for name, label in (("baseline", "Zero-shot BLIP"), ("blip-lora", "BLIP-LoRA")):
+    for name, label in (("baseline", "Zero-shot BLIP"), ("archive/v1/blip-lora", "BLIP-LoRA v1"), ("blip-lora", "BLIP-LoRA")):
         ms = [json.loads(p.read_text()) for p in sorted((runs / name).glob("f[0-4].json"))]
         if not ms:
             continue

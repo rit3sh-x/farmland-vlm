@@ -271,6 +271,12 @@ def test_report_tables_from_runs(tmp_path):
             write(rows_, summarise(rows_), tmp_path / name / f"f{f}", field_of)
     t1 = table_ablation(tmp_path)
     assert [r["model"] for r in t1] == ["Zero-shot BLIP", "BLIP-LoRA"] and t1[1]["presence"][1] == pytest.approx(0.0, abs=1e-12)
+    (tmp_path / "archive" / "v1").mkdir(parents=True)
+    (tmp_path / "blip-lora").rename(tmp_path / "archive" / "v1" / "blip-lora")
+    (tmp_path / "blip-lora").mkdir()
+    for f in range(5):
+        write(rows_, summarise(rows_), tmp_path / "blip-lora" / f"f{f}", field_of)
+    assert [r["model"] for r in table_ablation(tmp_path)] == ["Zero-shot BLIP", "BLIP-LoRA v1", "BLIP-LoRA"]
     assert table_per_class(tmp_path)["baseline"]["drydown"]["n_present"] >= 0
     t3 = {r["model"]: r for r in table_fold0(tmp_path)}
     assert t3["BLIP-LoRA"]["diff"] is None and t3["Qwen3.5-2B LoRA, RGB"]["diff"][0] == pytest.approx(0.0)
