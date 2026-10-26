@@ -333,6 +333,29 @@ def test_best_and_early_stop_use_only_second_half_checks(tmp_path):
     assert state["step"] == 90 and state["best"] == .58 and (tmp_path / "best").exists()
 
 
+def test_resume_continues_from_train_state_and_warm_restart_starts_fresh(tmp_path):
+    import torch
+
+    from farmvlm import loop
+
+    class Tiny(torch.nn.Linear):
+        def save_pretrained(self, d):
+            d.mkdir(parents=True, exist_ok=True)
+
+    model, batches, loss = Tiny(1, 1), iter(lambda: torch.ones(1, 1), None), lambda x: model(x).sum()
+    scores = iter([.1 * k for k in range(1, 20)])
+    first = tmp_path / "c1"; first.mkdir()
+    loop.run(model, batches, loss, lambda: next(scores), loop.LoopConfig(out=first, pairs=40, batch=1, eval_every=10))
+    assert (first / "last" / "train_state.pt").exists() and (first / "best").exists()
+    state = loop.run(model, batches, loss, lambda: next(scores),
+                     loop.LoopConfig(out=first, pairs=60, batch=1, eval_every=10, resume=first / "last"))
+    assert state["step"] == 60 and len((first / "metrics.jsonl").read_text().splitlines()) == 6  # 4 checks, then 2 more
+    second = tmp_path / "c2"; second.mkdir()
+    state = loop.run(model, batches, loss, lambda: next(scores),
+                     loop.LoopConfig(out=second, pairs=30, batch=1, eval_every=10, resume=first / "best"))
+    assert state["step"] == 30 and len((second / "metrics.jsonl").read_text().splitlines()) == 3  # fresh count, as cycle 2
+
+
 def test_sh_parallel_puts_each_command_on_its_own_gpu(tmp_path, monkeypatch):
     import importlib.util
     import sys
