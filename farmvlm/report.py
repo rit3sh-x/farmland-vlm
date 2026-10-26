@@ -107,10 +107,15 @@ def aligned(runs: Path, a: str, b: str, fold: int = 0):
     return ca, cb, np.array([ka[k]["field"] for k in keys])
 
 
+def with_v1(rows_: tuple) -> list[tuple]:
+    """Each (run, label) preceded by its archived v1 record, named archive/v1/<run>, labelled "<label> v1"."""
+    return [r for name, label in rows_ for r in ((f"archive/v1/{name}", f"{label} v1"), (name, label))]
+
+
 def table_fold0(runs: Path) -> list[dict]:
     """Table 3: fold-0 comparison with field-grouped 95% CIs and paired differences against BLIP-LoRA."""
     out = []
-    for name, label in FOLD0_ROWS:
+    for name, label in with_v1(FOLD0_ROWS):
         if not (runs / name / "f0.jsonl").exists():
             continue
         ca, cb, g = aligned(runs, name, "blip-lora")

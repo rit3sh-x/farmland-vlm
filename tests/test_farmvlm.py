@@ -280,7 +280,9 @@ def test_report_tables_from_runs(tmp_path):
     assert [r["model"] for r in table_ablation(tmp_path)] == ["Zero-shot BLIP", "BLIP-LoRA v1", "BLIP-LoRA"]
     assert table_per_class(tmp_path)["baseline"]["drydown"]["n_present"] >= 0
     t3 = {r["model"]: r for r in table_fold0(tmp_path)}
+    assert list(t3) == ["Zero-shot BLIP", "BLIP-LoRA v1", "BLIP-LoRA", "Qwen3.5-2B LoRA, RGB"]
     assert t3["BLIP-LoRA"]["diff"] is None and t3["Qwen3.5-2B LoRA, RGB"]["diff"][0] == pytest.approx(0.0)
+    assert t3["BLIP-LoRA v1"]["diff"][0] == pytest.approx(0.0)
     assert "BLIP-LoRA" in latex_fold0(list(t3.values())) and 0 <= table_constant(tmp_path)["mean"][0] <= 1
     assert {r["model"] for r in table_hedging(tmp_path)} == {"baseline", "blip-lora", "served-rgb-eval"}
 

@@ -15,9 +15,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipeline import CODE, visible_gpus  # noqa: E402
 
 # Pipeline arguments per GPU, run in parallel; with fewer GPUs than groups, the groups queue on the GPUs there are.
-# Week of 2026-10-26 (about 3 quota hours left): finish caption fold 0 v2 and train VQA fold 0 v2 as the v2 checks.
-GROUPS = (["--only", "blip", "--tasks", "caption", "--folds", "0"],
-          ["--only", "blip", "--tasks", "vqa", "--folds", "0"])
+# Weekend of 2026-10-31 (two 12 h sessions; everything resumes): GPU 0 trains Qwen cycle 2 (RGB, then NDVI) and scores,
+# exports and stress-tests it; GPU 1 trains whichever v2 BLIP folds Colab has not finished, then scores all five folds,
+# runs the robustness suite and the heatmaps on fold 0.
+GROUPS = (["--only", "served", "export", "served-robustness"],
+          ["--only", "blip", "robustness", "heatmaps"])
 
 
 def main():

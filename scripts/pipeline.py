@@ -190,22 +190,21 @@ def main():
                              "--pairs", SERVED_PAIRS, *eval_flags, "--out", RUNS / run, *extra, *flags, *(resume_args(run) or warm)])
             sh_parallel(cmds)
         for name, flags in SERVED_VARIANTS:
-            evaluate(f"{served_run(name)}-eval", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
+            evaluate(f"{name}-eval", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
                      *flags, marker="f0.json")
         evaluate("served-zeroshot-eval", a, "eval_vlm.py", "--model", b["winner"], marker="f0.json")
     if want("export"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
         for name, _ in SERVED_VARIANTS:
-            run = served_run(name)
-            out = RUNS / f"export-{run}"
-            if not fetch(f"export-{run}", "lora-f16.gguf" if not b["merged_route"] else "model-Q4_K_M.gguf"):
-                sh(sys.executable, CODE / "scripts" / "export_gguf.py", "--model", b["winner"], "--adapter", RUNS / run / "best",
+            out = RUNS / f"export-{name}"
+            if not fetch(f"export-{name}", "lora-f16.gguf" if not b["merged_route"] else "model-Q4_K_M.gguf"):
+                sh(sys.executable, CODE / "scripts" / "export_gguf.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
                    "--out", out, *(["--merged"] if b["merged_route"] else []))
-                hub.push(out, f"export-{run}", include=("*.gguf",))
+                hub.push(out, f"export-{name}", include=("*.gguf",))
     if want("served-robustness"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
         for name, flags in SERVED_VARIANTS:
-            evaluate(f"robust-{served_run(name)}", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
+            evaluate(f"robust-{name}", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
                      "--suite", "robustness", *flags, marker="f0-rot90-None.json")
 
 
