@@ -152,7 +152,8 @@ def main():
         for f in a.folds:
             for t in a.tasks:
                 c = best[t]
-                train_blip(f"blip-{t}-f{f}", a, t, fold=f, rank=c["rank"], lr=c["lr"], targets=c["targets"], pairs=120_000)
+                # The full budget, best second-half checkpoint kept: patience 3 stopped runs on validation noise (300 tiles).
+                train_blip(f"blip-{t}-f{f}", a, t, fold=f, rank=c["rank"], lr=c["lr"], targets=c["targets"], pairs=120_000, patience=99)
         if len(a.tasks) == 2 and len(a.folds) == 5:  # held-out scoring needs every fold's adapters for both tasks
             evaluate("blip-lora", a, "eval_blip.py", "--vqa-adapter", RUNS / "blip-vqa-f{fold}" / "best",
                      "--caption-adapter", RUNS / "blip-caption-f{fold}" / "best")
