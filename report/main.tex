@@ -26,6 +26,11 @@ Our contributions are:
 \section{Data and QA generation}\label{sec:data}
 \paragraph{Tiles.} We use the 2021 supervised release: 94,986 tiles of 512$\times$512 pixels with RGB and NIR bands. The test split is unlabelled, so all experiments use the 75,278 train and validation tiles from 2,116 fields. Besides each full tile we use its four 256$\times$256 quadrants, enlarged to 512 and relabelled from that quadrant's masks; quadrants with no anomaly give the clean examples (every full tile carries at least one anomaly). A view is used if at least half of it lies inside the field boundary.
 
+\begin{figure}[t]\centering
+\includegraphics[width=\columnwidth]{figures/dataset.pdf}
+\caption{The labelled data: share of tiles carrying each class (left), and the area of each present class with the extent cut points (right).}\label{fig:data}
+\end{figure}
+
 \paragraph{Mask statistics.} One streaming pass over the archive records, for each view and class, the class's share of in-field valid pixels and its share in each cell of a 3$\times$3 grid. Classes are counted independently, so overlapping labels count for both. A separate generator turns these statistics into pairs, so cut points can be retuned without re-reading the archive.
 
 \paragraph{Question types.} All answers are short and closed-vocabulary:

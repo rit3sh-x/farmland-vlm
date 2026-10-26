@@ -39,18 +39,16 @@ Tiles with 2+ anomalies & 6.3\% \\
 \begin{frame}{From masks to language}
 One streaming pass turns every tile and quadrant into mask statistics; a generator turns those into text.
 \medskip
-\footnotesize
-\begin{tabular}{lll}
+\resizebox{\textwidth}{!}{\begin{tabular}{lll}
 \toprule
 Question type & Example & Answer vocabulary \\
 \midrule
 Presence & Is there weed cluster in this tile? & yes / no, balanced per view \\
 Identify & What anomalies are visible? & class names, largest first, or \emph{none} \\
-Extent & How much of the tile does the drydown cover? & small / moderate / large, cut at 10\% and 35\% of the field \\
+Extent & How much of the tile does the drydown cover? & small / moderate / large (cuts at 10\% and 35\%) \\
 Location & Where is the standing water? & a 3$\times$3 grid cell, or \emph{throughout} \\
 \bottomrule
-\end{tabular}
-\normalsize
+\end{tabular}}
 
 \medskip
 Caption: ``Large drydown throughout the tile, with small weed cluster at the top left'', in one of five phrasings.

@@ -198,15 +198,46 @@ def sweep(runs: Path, out: Path):
     plt.close(fig)
 
 
+def dataset(stats: Path, out: Path):
+    """The labelled data as the generator sees it: tiles per class, and the area distribution behind the extent cuts."""
+    from farmvlm.folds import tile_presence
+    from farmvlm.scheme import CLASSES, EXTENT_CUTS, VIEWS
+    from farmvlm.stats import StatsTable
+    t = StatsTable.load(stats)
+    pres = tile_presence(t)
+    order = np.argsort(-pres.sum(0))
+    full = t.row_view == VIEWS.index("full")
+    area = t.area[full][t.area[full] > 0].astype(np.float32)
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(6.3, 2.3), gridspec_kw={"width_ratios": [1.2, 1]})
+    a1.barh(range(len(order)), [100 * pres[:, k].mean() for k in order][::-1], 0.7, color=MODELS["blip-lora"][1])
+    a1.set_yticks(range(len(order)), [CLASSES[k].name for k in order][::-1])
+    a1.set_xlabel("Share of labelled tiles with the class (%)")
+    a1.grid(axis="x")
+    a1.grid(axis="y", visible=False)
+    a2.hist(100 * area, bins=60, range=(0, 100), color=MODELS["blip-lora"][1])
+    for c, label, h in zip(EXTENT_CUTS, ("small | moderate", "moderate | large"), (0.92, 0.78)):
+        a2.axvline(100 * c, color=INK, lw=0.9, ls="--")
+        a2.text(100 * c + 1.5, a2.get_ylim()[1] * h, label, fontsize=6, color=INK)
+    a2.set_xlabel("Area of a present class, % of the field (full tiles)")
+    a2.set_ylabel("Findings")
+    fig.tight_layout()
+    fig.savefig(out / "dataset.pdf")
+    plt.close(fig)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=Path, default=Path("runs"))
+    ap.add_argument("--stats", type=Path, default=Path("data/stats.npz"))
     ap.add_argument("--out", type=Path, default=Path("report/figures"))
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     for make in (family_bars, lr_curves, risk_coverage_plot, robustness, sweep):
         make(a.runs, a.out)
         print("made", make.__name__, flush=True)
+    if a.stats.exists():
+        dataset(a.stats, a.out)
+        print("made dataset", flush=True)
 
 
 if __name__ == "__main__":
