@@ -44,7 +44,7 @@ Stages, tasks and folds can be chosen, which is how a change is checked on one f
 python scripts/pipeline.py ... --only sweep blip --tasks caption --folds 0
 ```
 
-On Kaggle (two T4s), the notebook cell runs `scripts/kaggle.py`, which starts one pipeline per GPU over the argument groups set in that script; the notebook itself never changes. Finished runs are skipped and interrupted ones resume from their last checkpoint on the Hub, so a stopped session loses at most one checkpoint interval.
+On a free Colab T4, `scripts/colab/keepalive.sh "<stages>"` (run on the laptop) keeps a session working on the given pipeline stages, relaunching whenever Colab recycles the VM. On Kaggle (two T4s), the notebook cell runs `scripts/kaggle.py`, which starts one pipeline per GPU over the argument groups set in that script; the notebook itself never changes. Finished runs are skipped and interrupted ones resume from their last checkpoint on the Hub, so a stopped session loses at most one checkpoint interval.
 
 The report's tables, figures and headline numbers rebuild from the run records (`runs/` mirrors the Hub repo's json and jsonl files):
 
