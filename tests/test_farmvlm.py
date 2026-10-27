@@ -386,16 +386,13 @@ def test_write_keeps_a_dotted_variant_name(tmp_path):
     assert sorted(p.name for p in tmp_path.glob("*.json")) == ["f0-light-0.1.json", "f0-light-0.25.json"]
 
 
-def test_sampler_balances_location_draws_between_cells_and_throughout():
-    from farmvlm.sampler import LOCATION_CELL_SHARE
+def test_sampler_location_draws_follow_the_data_unless_a_cell_share_is_set():
     t = synthetic_table()
     spread = np.arange(len(t.area)) % 2 == 0  # even rows: the mask is spread over the grid, so the answer is "throughout"
     t.cells[spread] = (t.area[spread] > 0)[:, :, None] / 9
-    s = Sampler(t, np.arange(len(t.tile)), "blip_vqa", 0)
-    loc = [i for i in s.draws(6000) if i.family == "location"]
-    assert len(loc) > 500
-    throughout = np.mean([i.answer == "throughout" for i in loc])
-    assert abs(throughout - (1 - LOCATION_CELL_SHARE)) < 0.06, throughout
+    share = lambda s: np.mean([i.answer == "throughout" for i in s.draws(6000) if i.family == "location"])
+    assert abs(share(Sampler(t, np.arange(len(t.tile)), "blip_vqa", 0)) - 0.5) < 0.1
+    assert abs(share(Sampler(t, np.arange(len(t.tile)), "blip_vqa", 0, location_cell_share=0.65)) - 0.35) < 0.06
 
 
 def test_question_templates_are_many_disjoint_and_keep_the_evaluation_phrasing():

@@ -12,10 +12,11 @@ import numpy as np
 from farmvlm.metrics import ece, field_resample_means, grouped_bootstrap, is_hedge, margin_hedge, risk_coverage, vqa_credit
 from farmvlm.items import Item
 from farmvlm.text import lenient_answer
-from farmvlm.scheme import CLASSES, CLASS_INDEX
+from farmvlm.scheme import CLASSES, CLASS_INDEX, THROUGHOUT
 
 FAMILIES = ("presence", "identify", "extent", "location")
 FOLD0_ROWS = (("baseline", "Zero-shot BLIP"), ("blip-lora", "BLIP-LoRA"), ("dora", "BLIP-DoRA"),
+              ("balanced", "BLIP-LoRA, balanced location draws"),
               ("served-zeroshot-eval", "Qwen3.5-2B, zero-shot"), ("served-rgb-eval", "Qwen3.5-2B LoRA, RGB"),
               ("served-ndvi-eval", "Qwen3.5-2B LoRA, RGB + NDVI"))
 
@@ -130,6 +131,18 @@ def table_fold0(runs: Path) -> list[dict]:
     if (runs / "served-ndvi-eval" / "f0.jsonl").exists() and (runs / "served-rgb-eval" / "f0.jsonl").exists():
         ca, cb, g = aligned(runs, "served-ndvi-eval", "served-rgb-eval")
         out.append({"model": "NDVI minus RGB", "acc": None, "diff": grouped_bootstrap(ca, g, other=cb)})
+    return out
+
+
+def table_location_split(runs: Path, names=("archive/v1/blip-lora", "blip-lora", "balanced")) -> dict:
+    """Location accuracy on fold-0 items whose truth is "throughout" and on the localised ones, per model."""
+    out = {}
+    for name in names:
+        rs = [r for r in rows(runs / name / "f0.jsonl") if r["family"] == "location" and r.get("pred") is not None]
+        if rs:
+            c, thr = credits(rs), np.array([r["truth"] == THROUGHOUT for r in rs])
+            out[name] = {"throughout": float(c[thr].mean()), "localised": float(c[~thr].mean()),
+                         "n_throughout": int(thr.sum()), "n_localised": int((~thr).sum())}
     return out
 
 
@@ -375,7 +388,7 @@ def main():
     results = {"ablation": table_ablation(a.runs), "per_class": table_per_class(a.runs), "fold0": table_fold0(a.runs),
                "hedging": table_hedging(a.runs), "hedge_rule": table_hedge_rule(a.runs), "robustness": table_robustness(a.runs),
                "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs), "cost": table_cost(a.runs),
-               "sweep": sweep_scores(a.runs)}
+               "sweep": sweep_scores(a.runs), "location_split": table_location_split(a.runs)}
     (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))
     results["constant"] = table_constant(a.runs)
     (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))

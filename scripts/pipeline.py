@@ -5,7 +5,7 @@ from its last pushed checkpoint.
     HF_TOKEN=... python scripts/pipeline.py --stats /content/stats.npz --root /content/av/Agriculture-Vision-2021
     python scripts/pipeline.py ... --only baseline sweep
 
-Stages: baseline sweep bakeoff blip robustness heatmaps leakage dora served export served-robustness.
+Stages: baseline sweep bakeoff blip robustness heatmaps leakage dora balanced served export served-robustness.
 """
 import argparse
 import json
@@ -175,6 +175,12 @@ def main():
         c = best.get("vqa") or final(sweep(a, "vqa")["choice"])
         train_blip("blip-vqa-f0-dora", a, "vqa", fold=0, rank=c["rank"], lr=c["lr"], targets=c["targets"], dora=True, pairs=120_000)
         evaluate("dora", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", RUNS / "blip-vqa-f0-dora" / "best",
+                 "--caption-adapter", RUNS / "blip-caption-f0" / "best", marker="f0.json")
+    if want("balanced"):  # the location-balanced sampler, fold 0: an ablation of the final VQA recipe
+        c = best.get("vqa") or final(sweep(a, "vqa")["choice"])
+        train_blip("blip-vqa-f0-balanced", a, "vqa", fold=0, rank=c["rank"], lr=c["lr"], targets=c["targets"], pairs=120_000,
+                   patience=99, location_cell_share=0.65)
+        evaluate("balanced", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", RUNS / "blip-vqa-f0-balanced" / "best",
                  "--caption-adapter", RUNS / "blip-caption-f0" / "best", marker="f0.json")
     if want("served"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())

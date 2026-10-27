@@ -16,16 +16,17 @@ MIXES = {
     "blip_caption": {"caption": 1.0},
 }
 CLEAN_SHARE = 0.12
-# Location draws: share whose answer is a grid cell rather than "throughout". In the data 55% of location truths
-# are "throughout"; v1 BLIP learnt that prior and answered it for 68% of the items whose anomaly was localised.
-LOCATION_CELL_SHARE = 0.65
+# Location draws follow the natural mix unless `location_cell_share` is set: 55% of location truths are "throughout",
+# and v1 BLIP answered it for 68% of the localised items. Raising the share of draws whose answer is a grid cell to
+# 0.65 (the "balanced" fold-0 ablation) cost 6.5 points of location accuracy on the natural distribution.
 CLEAN_FAMILIES = ("presence", "identify", "caption")
 FULL = VIEWS.index("full")
 
 
 class Sampler:
-    def __init__(self, t: StatsTable, tiles: np.ndarray, mix: str, seed: int, cuts=EXTENT_CUTS):
-        self.t, self.cuts, self.mix = t, cuts, MIXES[mix]
+    def __init__(self, t: StatsTable, tiles: np.ndarray, mix: str, seed: int, cuts=EXTENT_CUTS,
+                 location_cell_share: float | None = None):
+        self.t, self.cuts, self.mix, self.location_cell_share = t, cuts, MIXES[mix], location_cell_share
         self.rng = np.random.default_rng(seed)
         rows = np.flatnonzero(np.isin(t.row_tile, tiles))
         present = t.area[rows] > 0
@@ -65,10 +66,10 @@ class Sampler:
     def _rows(self, fam: str, cls: int) -> np.ndarray:
         if fam == "presence" and len(self.no[cls]) and self.rng.random() < 0.5:
             return self.no[cls]
-        if fam == "location":
+        if fam == "location" and self.location_cell_share is not None:
             cell, throughout = self.loc[cls]
             if len(cell) and len(throughout):
-                return cell if self.rng.random() < LOCATION_CELL_SHARE else throughout
+                return cell if self.rng.random() < self.location_cell_share else throughout
         return self.yes[cls]
 
     def draws(self, n: int) -> list[Item]:

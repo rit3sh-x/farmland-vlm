@@ -17,9 +17,9 @@ from pipeline import CODE, visible_gpus  # noqa: E402
 # Pipeline arguments per GPU, run in parallel; with fewer GPUs than groups, the groups queue on the GPUs there are.
 # Weekend of 2026-10-31 (two 12 h sessions; everything resumes): GPU 0 trains Qwen cycle 2 (RGB, then NDVI) and scores,
 # exports and stress-tests it; GPU 1 trains whichever v2 BLIP folds Colab has not finished, then scores all five folds,
-# runs the robustness suite and the heatmaps on fold 0.
+# runs the robustness suite, the heatmaps and the balanced-sampler ablation on fold 0.
 GROUPS = (["--only", "served", "export", "served-robustness"],
-          ["--only", "blip", "robustness", "heatmaps"])
+          ["--only", "blip", "robustness", "heatmaps", "balanced"])
 
 
 def main():

@@ -34,12 +34,13 @@ TARGETS = {
 class Draws(IterableDataset):
     """An endless stream of (image, question, answer) from the balanced sampler; each worker draws with its own seed."""
 
-    def __init__(self, t, root, tiles, mix, seed):
+    def __init__(self, t, root, tiles, mix, seed, location_cell_share=None):
         self.t, self.root, self.tiles, self.mix, self.seed = t, root, tiles, mix, seed
+        self.location_cell_share = location_cell_share
 
     def __iter__(self):
         wid = get_worker_info().id if get_worker_info() else 0
-        s = Sampler(self.t, self.tiles, self.mix, self.seed * 1000 + wid)
+        s = Sampler(self.t, self.tiles, self.mix, self.seed * 1000 + wid, location_cell_share=self.location_cell_share)
         rng = np.random.default_rng(self.seed * 1000 + wid)
         while True:
             item = s.draw()
@@ -122,6 +123,7 @@ def main():
     ap.add_argument("--eval-every", type=int, default=5000)
     ap.add_argument("--patience", type=int, default=3)
     ap.add_argument("--val-tiles", type=int, default=300)
+    ap.add_argument("--location-cell-share", type=float, help="share of location draws answered by a grid cell (default: the natural mix)")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--resume", type=Path)
     a = ap.parse_args()
@@ -151,7 +153,7 @@ def main():
                trainable=sum(p.numel() for p in model.parameters() if p.requires_grad))
     (a.out / "config.json").write_text(json.dumps(cfg, indent=1))
     mix = "blip_vqa" if a.task == "vqa" else "blip_caption"
-    dl = DataLoader(Draws(t, a.root, train_tiles, mix, a.seed + (7919 if a.resume else 0)), batch_size=a.batch, num_workers=2,
+    dl = DataLoader(Draws(t, a.root, train_tiles, mix, a.seed + (7919 if a.resume else 0), a.location_cell_share), batch_size=a.batch, num_workers=2,
                     collate_fn=collate(proc, a.task, model.config.text_config.bos_token_id), prefetch_factor=4)
     loop.run(model, dl, loss_of(model, a.task), validate,
              loop.LoopConfig(out=a.out, pairs=a.pairs, batch=a.batch, lr=a.lr, eval_every=a.eval_every,
