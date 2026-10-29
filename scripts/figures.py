@@ -233,8 +233,11 @@ def main():
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     for make in (family_bars, lr_curves, risk_coverage_plot, robustness, sweep):
-        make(a.runs, a.out)
-        print("made", make.__name__, flush=True)
+        try:
+            make(a.runs, a.out)
+            print("made", make.__name__, flush=True)
+        except (FileNotFoundError, ValueError, KeyError, IndexError) as e:  # a record this figure reads is not scored yet
+            print("skipped", make.__name__, "-", type(e).__name__, str(e)[:80], flush=True)
     if a.stats.exists():
         dataset(a.stats, a.out)
         print("made dataset", flush=True)
