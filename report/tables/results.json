@@ -563,6 +563,29 @@
    "n_localised": 936
   }
  },
+ "captions": [
+  {
+   "kind": "clean",
+   "row": 5509,
+   "reference": "No anomalies visible",
+   "v1": "visible here the tile the field looks clean the tile the field looks clean the tile the field has small nutrient deficiency at the bottom right or throughout the tile",
+   "final": null
+  },
+  {
+   "kind": "one finding",
+   "row": 842,
+   "reference": "Small waterway at the left",
+   "v1": "moderate waterway throughout the tile, with small weed cluster at the top right or throughout the tile and small waterway at the right or throughout the tile",
+   "final": null
+  },
+  {
+   "kind": "several findings",
+   "row": 8763,
+   "reference": "Small double plant at the bottom right, with possibly small weed cluster at the bottom right",
+   "v1": "visible here the field has small double plant at the bottom right or bottom right, with small weed cluster at the bottom right or bottom right, with small planter skip at the bottom right or bottom right",
+   "final": null
+  }
+ ],
  "constant": {
   "presence": [
    0.5332321720831201,

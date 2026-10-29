@@ -151,6 +151,29 @@ def first_ref(r: dict) -> str:
     return refs[0] if refs else ""
 
 
+def table_caption_examples(runs: Path, fold: int = 0) -> list[dict]:
+    """Three fold-0 tiles (clean, one finding, several): the reference caption, the first cycle's caption and the final one."""
+    v1 = {r["row"]: r for r in rows(runs / "archive" / "v1" / "blip-lora" / f"f{fold}.jsonl") if r["family"] == "caption"}
+    final = {r["row"]: r for r in rows(runs / "blip-lora" / f"f{fold}.jsonl") if r["family"] == "caption"}
+    src = final or v1
+    clean = lambda ref: ref.lower().startswith("no anomalies")
+    kinds = (("clean", clean), ("one finding", lambda ref: not clean(ref) and "," not in ref), ("several findings", lambda ref: "," in ref))
+    out = []
+    for kind, ok in kinds:
+        row = next((k for k in sorted(src) if ok(first_ref(src[k]))), None)  # the lowest row id of its kind: no cherry-picking
+        if row is not None:
+            out.append({"kind": kind, "row": row, "reference": first_ref(src[row]).rstrip("."),
+                        "v1": v1.get(row, {}).get("pred"), "final": final.get(row, {}).get("pred")})
+    return out
+
+
+def latex_captions(t: list[dict]) -> str:
+    """The caption examples: one row per tile, reference beside the first cycle's and the final caption."""
+    esc = lambda x: "\\textbf{??}" if x is None else x.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
+    body = [" & ".join([r["kind"].capitalize(), esc(r["reference"]), esc(r["v1"]), esc(r["final"])]) for r in t]
+    return tabular("l" + "p{0.29\\textwidth}" * 3, "Tile & Reference & First cycle & Final", body)
+
+
 def table_location_split(runs: Path, names=("archive/v1/blip-lora", "blip-lora", "balanced")) -> dict:
     """Location accuracy on fold-0 items whose truth is "throughout" and on the localised ones, per model."""
     out = {}
@@ -447,14 +470,15 @@ def main():
     results = {"ablation": table_ablation(a.runs), "per_class": table_per_class(a.runs), "fold0": table_fold0(a.runs),
                "hedging": table_hedging(a.runs), "hedge_rule": table_hedge_rule(a.runs), "robustness": table_robustness(a.runs),
                "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs), "cost": table_cost(a.runs),
-               "sweep": sweep_scores(a.runs), "location_split": table_location_split(a.runs)}
+               "sweep": sweep_scores(a.runs), "location_split": table_location_split(a.runs), "captions": table_caption_examples(a.runs)}
     (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))
     results["constant"] = table_constant(a.runs)
     (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))
     (a.out / "numbers.tex").write_text(latex_numbers(results))
     for name, tex in (("ablation", latex_ablation(results["ablation"], results["constant"])), ("fold0", latex_fold0(results["fold0"])),
                       ("hedging", latex_hedging(results["hedging"])), ("per_class", latex_per_class(results["per_class"])),
-                      ("leakage", latex_leakage(results["leakage"])), ("cost", latex_cost(results["cost"]))):
+                      ("leakage", latex_leakage(results["leakage"])), ("cost", latex_cost(results["cost"])),
+                      ("captions", latex_captions(results["captions"]))):
         (a.out / f"{name}.tex").write_text(tex)
     print(json.dumps({k: (len(v) if hasattr(v, "__len__") else v) for k, v in results.items()}))
 

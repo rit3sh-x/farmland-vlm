@@ -202,12 +202,13 @@ Model + adapters in RAM & about 3 GB \\
 \end{columns}
 \end{frame}
 
-\begin{frame}{v2: what a closer look at the errors found}
+\begin{frame}{Second cycle: four findings from the first}
 \begin{itemize}
-\item \textbf{Captions never ended.} BLIP's caption head cannot emit a full stop (probability $2\!\times\!10^{-6}$ in the base model), and every target ended in one. The model learned ``end after the full stop'' and rambled: 32 words per caption against 9 in the truth, precision 46\%. Fix: captions end on their last word. Caption fact F1 at 10k pairs: 52.5\% $\to$ 69.3\%; fold 0 at 25k pairs: 76.7\%.
-\item \textbf{Location was the prior.} 55\% of location truths are \emph{throughout}; BLIP-LoRA scored 91\% on those and 24\% on localised anomalies. Fix: balanced location draws in the sampler. Ground truth unchanged.
-\item \textbf{Five phrasings per question were too few.} Now twelve, with the held-out synonym phrasings untouched.
-\item \textbf{Qwen was under-trained:} a second 30k-pair cycle, warm-started.
+\item \textbf{Captions never ended.} \texttt{blip-image-captioning-base} gives a full stop a loss near 13 nats and every target ended in one, so captions ran to \voneFoldWords\ words against \referenceWords\ in the truth (precision \voneFoldPrecision\%). Fix: targets end on their last word. Fold-0 fact F1 \voneFoldFactF\% $\to$ \blipFoldFactF\% (validation 0.631 $\to$ 0.839).
+\item \textbf{Early stopping fired on noise.} Patience 3 on a 300-tile validation set: every VQA fold stopped at 80--115k pairs while its last six checks sat within 0.6--3.4 points. Fix: the full 120k pairs, best second-half check.
+\item \textbf{Location: do not rebalance the draws.} 55\% of truths are \emph{throughout}; the first cycle scored \voneLocThroughout\% on those and \voneLocLocalised\% on localised items. Drawing cells 65\% of the time lifted localised items to \balLocLocalised\% but cost \balLocDrop\ points on the natural mix. The final sampler keeps the data's own draws; both adapters are kept.
+\item \textbf{Five phrasings were too few.} Twelve now, no synonym shared with the held-out set: paraphrase drop \voneParaphraseDrop\ $\to$ \blipParaphraseDrop\ points.
+\item \textbf{Qwen:} 30k more pairs on the corrected targets, warm-started from cycle 1.
 \end{itemize}
 \end{frame}
 
