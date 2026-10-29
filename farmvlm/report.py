@@ -3,6 +3,7 @@
     python -m farmvlm.report --runs runs --out report/tables
 """
 import argparse
+import ast
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -15,7 +16,7 @@ from farmvlm.text import lenient_answer
 from farmvlm.scheme import CLASSES, CLASS_INDEX, THROUGHOUT
 
 FAMILIES = ("presence", "identify", "extent", "location")
-FOLD0_ROWS = (("baseline", "Zero-shot BLIP"), ("blip-lora", "BLIP-LoRA"), ("dora", "BLIP-DoRA"),
+FOLD0_ROWS = (("baseline", "Zero-shot BLIP"), ("blip-lora", "BLIP-LoRA"), ("dora", "BLIP-DoRA v1"),
               ("balanced", "BLIP-LoRA, balanced location draws"),
               ("served-zeroshot-eval", "Qwen3.5-2B, zero-shot"), ("served-rgb-eval", "Qwen3.5-2B LoRA, RGB"),
               ("served-ndvi-eval", "Qwen3.5-2B LoRA, RGB + NDVI"))
@@ -69,7 +70,8 @@ def table_ablation(runs: Path) -> list[dict]:
 def table_constant(runs: Path) -> dict:
     """The best single answer per question type, picked with hindsight on each fold's own test items: the floor to clear."""
     folds = []
-    for path in sorted((runs / "blip-lora").glob("f[0-4].jsonl")):
+    src = next((runs / n for n in ("blip-lora", "baseline") if (runs / n / "f0.jsonl").exists()), runs / "blip-lora")  # same items either way
+    for path in sorted(src.glob("f[0-4].jsonl")):
         rs = [r for r in rows(path) if r["family"] != "caption"]
         fam = {}
         for f in FAMILIES:
@@ -119,19 +121,34 @@ def table_fold0(runs: Path) -> list[dict]:
     for name, label in with_v1(FOLD0_ROWS):
         if not (runs / name / "f0.jsonl").exists():
             continue
-        ca, cb, g = aligned(runs, name, "blip-lora")
+        ref = "archive/v1/blip-lora" if name == "dora" else "blip-lora"  # DoRA trained in the first cycle: pair it with that LoRA
+        ca, cb, g = aligned(runs, name, ref)
+        paired = name != ref and len(ca) > 0
+        if not len(ca):  # the reference is not scored yet: pooled accuracy over the model's own items, no paired difference
+            ca, cb, g = aligned(runs, name, name)
         m = json.loads((runs / name / "f0.json").read_text())
-        rs = [x for x in rows(runs / name / "f0.jsonl") if x["family"] != "caption"]
+        all_rows = rows(runs / name / "f0.jsonl")
+        rs = [x for x in all_rows if x["family"] != "caption"]
+        caps = [x for x in all_rows if x["family"] == "caption"]
         lenient = {f: float(np.mean([vqa_credit(item_of(x), lenient_answer(f, x["pred"])) for x in rs if x["family"] == f]))
                    for f in FAMILIES}
-        out.append({"model": label, "acc": grouped_bootstrap(ca, g),
-                    "diff": None if name == "blip-lora" else grouped_bootstrap(ca, g, other=cb),
+        out.append({"model": label, "acc": grouped_bootstrap(ca, g), "diff": grouped_bootstrap(ca, g, other=cb) if paired else None,
                     "by_family": m["vqa_generated"]["by_family"], "by_family_lenient": lenient,
-                    "caption": {k: m["caption_facts"][k] for k in ("precision", "recall", "f1")}})
+                    "caption": {k: m["caption_facts"][k] for k in ("precision", "recall", "f1")},
+                    "caption_words": float(np.mean([len(str(x["pred"]).split()) for x in caps])) if caps else None,
+                    "reference_words": float(np.mean([len(first_ref(x).split()) for x in caps])) if caps else None})
     if (runs / "served-ndvi-eval" / "f0.jsonl").exists() and (runs / "served-rgb-eval" / "f0.jsonl").exists():
         ca, cb, g = aligned(runs, "served-ndvi-eval", "served-rgb-eval")
         out.append({"model": "NDVI minus RGB", "acc": None, "diff": grouped_bootstrap(ca, g, other=cb)})
     return out
+
+
+def first_ref(r: dict) -> str:
+    """The first reference caption of a scored caption row (records store the list as text)."""
+    refs = r.get("refs") or []
+    if isinstance(refs, str):
+        refs = ast.literal_eval(refs)
+    return refs[0] if refs else ""
 
 
 def table_location_split(runs: Path, names=("archive/v1/blip-lora", "blip-lora", "balanced")) -> dict:
@@ -161,19 +178,19 @@ def table_hedging(runs: Path, names=("baseline", "blip-lora", "served-rgb-eval",
         cov, acc, aurc = risk_coverage(conf, correct)
         out.append({"model": name, "hedge_amb": float(hedged[amb].mean()), "hedge_clear": float(hedged[~amb].mean()),
                     "credit_amb": float(cr[amb].mean()), "acc_clear": float(cr[~amb].mean()), "ece": ece(conf, correct),
-                    "aurc": aurc, "acc_at_80": float(acc[int(0.8 * len(acc)) - 1])})
+                    "aurc": aurc, "acc_at_80": float(acc[int(0.8 * len(acc)) - 1]), "acc_all": float(acc[-1])})
     return out
 
 
 def table_robustness(runs: Path) -> dict:
     """Table 5: accuracy drop from clean per variant (fold 0, 500-tile subset)."""
     res = {}
-    for d in sorted(runs.glob("robust-*")):
+    for d in sorted(runs.glob("robust-*")) + sorted((runs / "archive" / "v1").glob("robust-*")):
         clean = d / "f0-clean.json"
         if not clean.exists():
             continue
         base = json.loads(clean.read_text())["vqa_generated"]["accuracy"]
-        res[d.name] = {p.stem.removeprefix("f0-"): json.loads(p.read_text())["vqa_generated"]["accuracy"] - base
+        res[str(d.relative_to(runs))] = {p.stem.removeprefix("f0-"): json.loads(p.read_text())["vqa_generated"]["accuracy"] - base
                        for p in sorted(d.glob("f0-*.json")) if p.stem != "f0-clean"}
     return res
 
@@ -249,6 +266,20 @@ def table_pointing(runs: Path) -> dict:
     return json.loads(p.read_text())["summary"] if p.exists() else {}
 
 
+FOLD0_MACROS = (("Qwen3.5-2B LoRA, RGB", "qwenRgb"), ("Qwen3.5-2B LoRA, RGB + NDVI", "qwenNdvi"), ("BLIP-LoRA", "blipFold"),
+                ("BLIP-LoRA v1", "voneFold"), ("BLIP-LoRA, balanced location draws", "balanced"), ("BLIP-DoRA v1", "dora"))
+# Every macro the report and the deck may quote: one without a record yet prints ?? instead of breaking the build.
+MACROS = tuple("""blipMean blipMeanStd blipFactF blipFactFStd blipPresence blipIdentify blipExtent blipLocation blipRanked
+    zeroMean zeroPresence zeroIdentify voneMean voneMeanStd voneFactF vonePresence voneIdentify voneExtent voneLocation
+    constMean constLocation constIdentify blipAccEighty blipAurc blipCreditAmb blipAccClear blipEce blipAccAll zeroAurc
+    blipParaphraseDrop blipJpegDrop blipBlurDrop voneParaphraseDrop voneJpegDrop servedRgbParaphraseDrop servedNdviParaphraseDrop
+    leakGap leakLo leakHi leakSeen leakUnseen ndviDiff ndviLo ndviHi qwenZeroLenient pointZero pointLora pointChance energyZero energyLora
+    voneLocThroughout voneLocLocalised blipLocThroughout blipLocLocalised balLocThroughout balLocLocalised locNThroughout locNLocalised
+    balLocDrop referenceWords blipFoldWords voneFoldWords""".split()) + tuple(
+    name + s for _, name in FOLD0_MACROS for s in ("Mean", "Pooled", "Presence", "Location", "FactF", "Precision", "Recall", "Diff")
+    if name != "blipFold" or s != "Diff")
+
+
 def latex_numbers(res: dict) -> str:
     """\\newcommand macros for the headline numbers, so the deck and the report quote the current run records."""
     def pct(x):
@@ -267,13 +298,17 @@ def latex_numbers(res: dict) -> str:
     if "Zero-shot BLIP" in abl:
         z = abl["Zero-shot BLIP"]
         n.update(zeroMean=pct(z["mean"][0]), zeroPresence=pct(z["presence"][0]), zeroIdentify=pct(z["identify"][0]))
+    if "BLIP-LoRA v1" in abl:
+        v = abl["BLIP-LoRA v1"]
+        n.update(voneMean=pct(v["mean"][0]), voneMeanStd=pct(v["mean"][1]), voneFactF=pct(v["fact_f1"][0]), vonePresence=pct(v["presence"][0]),
+                 voneIdentify=pct(v["identify"][0]), voneExtent=pct(v["extent"][0]), voneLocation=pct(v["location"][0]))
     if res.get("constant"):
         c = res["constant"]
         n.update(constMean=pct(c["mean"][0]), constLocation=pct(c["location"][0]), constIdentify=pct(c["identify"][0]))
     if "blip-lora" in hed:
         h = hed["blip-lora"]
         n.update(blipAccEighty=pct(h["acc_at_80"]), blipAurc=f"{h['aurc']:.2f}", blipCreditAmb=pct(h["credit_amb"]),
-                 blipAccClear=pct(h["acc_clear"]), blipEce=f"{h['ece']:.2f}")
+                 blipAccClear=pct(h["acc_clear"]), blipEce=f"{h['ece']:.2f}", blipAccAll=pct(h["acc_all"]))
     if "baseline" in hed:
         n["zeroAurc"] = f"{hed['baseline']['aurc']:.2f}"
     if rob:
@@ -286,23 +321,45 @@ def latex_numbers(res: dict) -> str:
     if "NDVI minus RGB" in f0:
         d = f0["NDVI minus RGB"]["diff"]
         n.update(ndviDiff=pct(d[0]), ndviLo=pct(d[1]), ndviHi=pct(d[2]))
-    for key, name in (("Qwen3.5-2B LoRA, RGB", "qwenRgb"), ("Qwen3.5-2B LoRA, RGB + NDVI", "qwenNdvi"), ("BLIP-LoRA", "blipFold"),
-                      ("BLIP-DoRA", "dora")):
+    for key, name in FOLD0_MACROS:
         if key in f0:
-            fam = f0[key]["by_family"]
+            r, fam = f0[key], f0[key]["by_family"]
             n[name + "Mean"] = pct(np.mean([fam[f] for f in FAMILIES]))
+            n[name + "Pooled"] = pct(r["acc"][0])
             n[name + "Presence"] = pct(fam["presence"])
-            n[name + "FactF"] = pct(f0[key]["caption"]["f1"])
-            n[name + "Precision"] = pct(f0[key]["caption"]["precision"])
-    if "BLIP-DoRA" in f0 and f0["BLIP-DoRA"]["diff"]:
-        n["doraDiff"] = pct(f0["BLIP-DoRA"]["diff"][0])
+            n[name + "Location"] = pct(fam["location"])
+            n[name + "FactF"] = pct(r["caption"]["f1"])
+            n[name + "Precision"] = pct(r["caption"]["precision"])
+            n[name + "Recall"] = pct(r["caption"]["recall"])
+            if r["diff"]:
+                n[name + "Diff"] = pct(r["diff"][0])
+            if r.get("caption_words"):
+                n[name + "Words"] = f"{r['caption_words']:.0f}"
+                n["referenceWords"] = f"{r['reference_words']:.0f}"
+    for key, name in (("archive/v1/robust-blip-lora", "vone"), ("robust-served-rgb", "servedRgb"), ("robust-served-ndvi", "servedNdvi")):
+        r = res["robustness"].get(key, {})
+        if "paraphrase" in r:
+            n[name + "ParaphraseDrop"] = pct(-r["paraphrase"])
+        if "jpeg-10" in r:
+            n[name + "JpegDrop"] = pct(-r["jpeg-10"])
+    for key, name in (("archive/v1/blip-lora", "voneLoc"), ("blip-lora", "blipLoc"), ("balanced", "balLoc")):
+        s = res.get("location_split", {}).get(key)
+        if s:
+            n.update({name + "Throughout": pct(s["throughout"]), name + "Localised": pct(s["localised"]),
+                      "locNThroughout": f"{s['n_throughout']:,}", "locNLocalised": f"{s['n_localised']:,}"})
+    if "BLIP-LoRA" in f0 and "BLIP-LoRA, balanced location draws" in f0:
+        n["balLocDrop"] = pct(f0["BLIP-LoRA"]["by_family"]["location"] - f0["BLIP-LoRA, balanced location draws"]["by_family"]["location"])
     if "Qwen3.5-2B, zero-shot" in f0:
         n["qwenZeroLenient"] = pct(np.mean([f0["Qwen3.5-2B, zero-shot"]["by_family_lenient"][f] for f in FAMILIES]))
     if res.get("pointing"):
         p = res["pointing"]
         n.update(pointZero=pct(p["baseline"]["hit_rate"]), pointLora=pct(p["blip-lora"]["hit_rate"]),
                  pointChance=pct(p["blip-lora"]["chance"]), energyZero=pct(p["baseline"]["energy"]), energyLora=pct(p["blip-lora"]["energy"]))
-    return "".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in n.items())
+    missing = [k for k in MACROS if k not in n]
+    if missing:
+        print("numbers.tex: no record yet for", " ".join(missing))
+    return ("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in n.items())
+            + "".join(f"\\providecommand{{\\{k}}}{{\\textbf{{??}}}}\n" for k in missing))
 
 
 def sweep_scores(runs: Path) -> dict:
@@ -362,6 +419,8 @@ def latex_hedging(t4: list[dict]) -> str:
 def latex_per_class(t2: dict) -> str:
     names = [n for n in ("blip-lora", "served-rgb-eval", "served-ndvi-eval") if n in t2]
     labels = {"blip-lora": "BLIP-LoRA", "served-rgb-eval": "Qwen, RGB", "served-ndvi-eval": "Qwen, RGB + NDVI"}
+    if not names:
+        return tabular("l", "Class", ["\\textbf{??} no scored record yet"])
     body = []
     for c in CLASSES:
         n = t2[names[0]][c.key]["n_present"]
