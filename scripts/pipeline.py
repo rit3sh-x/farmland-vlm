@@ -82,6 +82,12 @@ def fetch(name: str, marker: str = "done.json") -> bool:
     return False
 
 
+def adapter(name: str) -> Path:
+    """A finished run's best adapter, pulled from the Hub first when another machine trained it."""
+    assert fetch(name), f"{name} is not finished on this VM or the Hub"
+    return RUNS / name / "best"
+
+
 def resume_args(name: str) -> list:
     if hub.has(name, "last/train_state.pt"):
         hub.pull(name, RUNS)
@@ -163,28 +169,28 @@ def main():
     if want("robustness"):
         evaluate("robust-baseline", a, "eval_blip.py", "--suite", "robustness", "--folds", 0, marker="f0-rot90-None.json")
         evaluate("robust-blip-lora", a, "eval_blip.py", "--suite", "robustness", "--folds", 0,
-                 "--vqa-adapter", RUNS / "blip-vqa-f0" / "best", "--caption-adapter", RUNS / "blip-caption-f0" / "best",
+                 "--vqa-adapter", adapter("blip-vqa-f0"), "--caption-adapter", adapter("blip-caption-f0"),
                  marker="f0-rot90-None.json")
     if want("heatmaps") and not fetch("heatmaps", "pointing.json"):
         sh(sys.executable, CODE / "scripts" / "heatmaps.py", "--stats", a.stats, "--root", a.root,
-           "--adapter", RUNS / "blip-vqa-f0" / "best", "--out", RUNS / "heatmaps")
+           "--adapter", adapter("blip-vqa-f0"), "--out", RUNS / "heatmaps")
         hub.push(RUNS / "heatmaps", "heatmaps")
     if want("leakage"):
         c = best.get("vqa") or final(sweep(a, "vqa")["choice"])
         train_blip("leak-vqa-official", a, "vqa", split="official", rank=c["rank"], lr=c["lr"], targets=c["targets"], pairs=120_000)
-        evaluate("leakage", a, "eval_blip.py", "--suite", "leakage", "--vqa-adapter", RUNS / "leak-vqa-official" / "best",
+        evaluate("leakage", a, "eval_blip.py", "--suite", "leakage", "--vqa-adapter", adapter("leak-vqa-official"),
                  marker="unseen-field.json")
     if want("dora"):
         c = best.get("vqa") or final(sweep(a, "vqa")["choice"])
         train_blip("blip-vqa-f0-dora", a, "vqa", fold=0, rank=c["rank"], lr=c["lr"], targets=c["targets"], dora=True, pairs=120_000)
-        evaluate("dora", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", RUNS / "blip-vqa-f0-dora" / "best",
-                 "--caption-adapter", RUNS / "blip-caption-f0" / "best", marker="f0.json")
+        evaluate("dora", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", adapter("blip-vqa-f0-dora"),
+                 "--caption-adapter", adapter("blip-caption-f0"), marker="f0.json")
     if want("balanced"):  # the location-balanced sampler, fold 0: an ablation of the final VQA recipe
         c = best.get("vqa") or final(sweep(a, "vqa")["choice"])
         train_blip("blip-vqa-f0-balanced", a, "vqa", fold=0, rank=c["rank"], lr=c["lr"], targets=c["targets"], pairs=120_000,
                    patience=99, location_cell_share=0.65)
-        evaluate("balanced", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", RUNS / "blip-vqa-f0-balanced" / "best",
-                 "--caption-adapter", RUNS / "blip-caption-f0" / "best", marker="f0.json")
+        evaluate("balanced", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", adapter("blip-vqa-f0-balanced"),
+                 "--caption-adapter", adapter("blip-caption-f0"), marker="f0.json")
     if want("served"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
         extra = ["--vision"] if b["merged_route"] else []
@@ -200,7 +206,7 @@ def main():
                              "--pairs", SERVED_PAIRS, *eval_flags, "--out", RUNS / run, *extra, *flags, *(resume_args(run) or warm)])
             sh_parallel(cmds)
         for name, flags in variants:
-            evaluate(f"{name}-eval", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
+            evaluate(f"{name}-eval", a, "eval_vlm.py", "--model", b["winner"], "--adapter", adapter(served_run(name)),
                      *flags, marker="f0.json")
         evaluate("served-zeroshot-eval", a, "eval_vlm.py", "--model", b["winner"], marker="f0.json")
     if want("export"):
@@ -208,13 +214,13 @@ def main():
         for name, _ in variants:
             out = RUNS / f"export-{name}"
             if not fetch(f"export-{name}", "lora-f16.gguf" if not b["merged_route"] else "model-Q4_K_M.gguf"):
-                sh(sys.executable, CODE / "scripts" / "export_gguf.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
+                sh(sys.executable, CODE / "scripts" / "export_gguf.py", "--model", b["winner"], "--adapter", adapter(served_run(name)),
                    "--out", out, *(["--merged"] if b["merged_route"] else []))
                 hub.push(out, f"export-{name}", include=("*.gguf",))
     if want("served-robustness"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
         for name, flags in variants:
-            evaluate(f"robust-{name}", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
+            evaluate(f"robust-{name}", a, "eval_vlm.py", "--model", b["winner"], "--adapter", adapter(served_run(name)),
                      "--suite", "robustness", *flags, marker="f0-rot90-None.json")
 
 
