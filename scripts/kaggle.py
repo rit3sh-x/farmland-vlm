@@ -15,12 +15,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipeline import CODE, visible_gpus  # noqa: E402
 
 # Pipeline arguments per GPU, run in parallel; with fewer GPUs than groups, the groups queue on the GPUs there are.
-# From 2026-11-01: GPU 0 trains Qwen cycle 2 (RGB and NDVI) and scores, exports and stress-tests it; GPU 1 trains the
-# v2 BLIP VQA folds 2-4 while Colab trains the caption folds 2-4 (split by task, so no run is ever on two machines),
-# then runs the fold-0 robustness suite, the heatmaps and the balanced-sampler scoring. The five-fold blip-lora scoring
-# runs wherever the last fold finishes (plain `--only blip`).
-GROUPS = (["--only", "served", "export", "served-robustness"],
-          ["--only", "blip", "robustness", "heatmaps", "balanced", "--tasks", "vqa", "--folds", "2", "3", "4"])
+# Second session of 2026-11-01 (start it only after the first has ended): GPU 0 finishes Qwen NDVI cycle 2 and scores,
+# exports and stress-tests it; GPU 1 trains whichever BLIP folds are left (caption 3-4 unless Colab finished them; stop
+# the Colab keepalive first so no run is on two machines), scores all five folds, then scores, exports and stress-tests
+# Qwen RGB, whose training the first session finished. Stages already on the Hub are skipped.
+GROUPS = (["--only", "served", "export", "served-robustness", "--variants", "served-ndvi"],
+          ["--only", "blip", "robustness", "heatmaps", "balanced", "served", "export", "served-robustness",
+           "--variants", "served-rgb"])
 
 
 def main():

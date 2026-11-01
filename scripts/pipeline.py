@@ -134,7 +134,10 @@ def main():
     ap.add_argument("--only", nargs="*")
     ap.add_argument("--tasks", nargs="*", default=["vqa", "caption"], choices=["vqa", "caption"], help="BLIP tasks to sweep and train")
     ap.add_argument("--folds", nargs="*", type=int, default=list(range(5)), help="BLIP folds to train")
+    ap.add_argument("--variants", nargs="*", default=[n for n, _ in SERVED_VARIANTS], choices=[n for n, _ in SERVED_VARIANTS],
+                    help="served variants to train, score, export and stress-test (one per GPU on Kaggle)")
     a = ap.parse_args()
+    variants = [v for v in SERVED_VARIANTS if v[0] in a.variants]
     RUNS.mkdir(parents=True, exist_ok=True)
     want = lambda s: not a.only or s in a.only
 
@@ -187,7 +190,7 @@ def main():
         extra = ["--vision"] if b["merged_route"] else []
         for cycle in range(1, SERVED_CYCLES + 1):
             cmds = []
-            for name, flags in SERVED_VARIANTS:
+            for name, flags in variants:
                 run = served_run(name, cycle)
                 if fetch(run):
                     continue
@@ -196,13 +199,13 @@ def main():
                 cmds.append([sys.executable, "-m", "farmvlm.train_vlm", "--model", b["winner"], "--stats", a.stats, "--root", a.root,
                              "--pairs", SERVED_PAIRS, *eval_flags, "--out", RUNS / run, *extra, *flags, *(resume_args(run) or warm)])
             sh_parallel(cmds)
-        for name, flags in SERVED_VARIANTS:
+        for name, flags in variants:
             evaluate(f"{name}-eval", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
                      *flags, marker="f0.json")
         evaluate("served-zeroshot-eval", a, "eval_vlm.py", "--model", b["winner"], marker="f0.json")
     if want("export"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
-        for name, _ in SERVED_VARIANTS:
+        for name, _ in variants:
             out = RUNS / f"export-{name}"
             if not fetch(f"export-{name}", "lora-f16.gguf" if not b["merged_route"] else "model-Q4_K_M.gguf"):
                 sh(sys.executable, CODE / "scripts" / "export_gguf.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
@@ -210,7 +213,7 @@ def main():
                 hub.push(out, f"export-{name}", include=("*.gguf",))
     if want("served-robustness"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
-        for name, flags in SERVED_VARIANTS:
+        for name, flags in variants:
             evaluate(f"robust-{name}", a, "eval_vlm.py", "--model", b["winner"], "--adapter", RUNS / served_run(name) / "best",
                      "--suite", "robustness", *flags, marker="f0-rot90-None.json")
 
