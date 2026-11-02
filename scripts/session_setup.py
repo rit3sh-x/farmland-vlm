@@ -1,6 +1,6 @@
 """Bring a fresh Colab VM to a ready state: code, packages, data, stats. Safe to rerun at any point.
 
-    curl -sL https://raw.githubusercontent.com/rit3sh-x/farmland-vlm/main/scripts/session_setup.py | python3 - [--commit SHA]
+    curl -sL https://raw.githubusercontent.com/rit3sh-x/farmland-vlm/main/scripts/session_setup.py | python3 - [--commit SHA] [--data-parts PART ...]
 """
 import argparse
 import subprocess
@@ -20,6 +20,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--commit", default="main")
     ap.add_argument("--no-data", action="store_true")
+    ap.add_argument("--data-parts", nargs="*", default=[], help="dataset parts to extract (fetch_data.PARTS; default all)")
     a = ap.parse_args()
     if not CODE.exists():
         sh("git", "clone", "-q", REPO, CODE)
@@ -29,7 +30,7 @@ def main():
     sh(sys.executable, "-m", "pip", "install", "-q", "-e", f"{CODE}[colab]")
     if a.no_data:
         return
-    sh(sys.executable, CODE / "scripts" / "fetch_data.py", DATA)
+    sh(sys.executable, CODE / "scripts" / "fetch_data.py", DATA, *a.data_parts)
     if not STATS.exists():
         sh(sys.executable, "-m", "farmvlm.stats", "--root", DATA / "Agriculture-Vision-2021",
            "--manifest", DATA / "data_manifest.csv", "--out", STATS)

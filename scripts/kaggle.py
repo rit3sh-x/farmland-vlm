@@ -4,7 +4,7 @@ one per GPU, or both on one card with room for them, so no card idles.
     python3 scripts/kaggle.py --stats /content/stats.npz --root /content/av/Agriculture-Vision-2021
 
 The notebook cell only fetches the code and runs this, so what a run does is set here, in the repo.
-Logs: $FARMVLM_LOGS/pipeline-<N>.out (default /kaggle/working), one per pipeline.
+Logs: pipeline-<N>.out in /kaggle/working on Kaggle, /content on molab, one per pipeline.
 """
 import os
 import shlex
@@ -15,17 +15,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipeline import CODE, visible_gpus  # noqa: E402
 
-LOGS = Path(os.environ.get("FARMVLM_LOGS", "/kaggle/working"))
+KAGGLE = Path("/kaggle/working").exists()
+LOGS = Path("/kaggle/working" if KAGGLE else "/content")
 GROUP_MIB = 20_000  # a T4-sized pipeline peaks under 16 GB
 
 # Pipeline arguments per GPU slot, run in parallel; with fewer slots than groups, the groups queue on the slots there are.
-# What remains after Kaggle session 1: the first group trains Qwen NDVI cycle 2 (session 1 was cancelled before its
-# first checkpoint) and scores, exports and stress-tests it. The second finishes the BLIP caption folds 3-4 and the
-# five-fold scoring, then runs the fold-0 robustness suite, heatmaps and balanced scoring, then scores, exports and
-# stress-tests Qwen RGB. Colab is off; run these on one machine at a time (molab from 2026-11-03, or Kaggle), never both.
-GROUPS = (["--only", "served", "export", "served-robustness", "--variants", "served-ndvi"],
-          ["--only", "blip", "robustness", "heatmaps", "balanced", "served", "export", "served-robustness",
-           "--variants", "served-rgb"])
+# What remains after Kaggle session 1, split by machine so the two can run at once on disjoint runs. molab extracts
+# only the RGB images (its sandbox died extracting all 21 GB), so it takes every RGB stage: the BLIP caption folds 3-4,
+# the five-fold scoring, fold-0 robustness and balanced scoring beside Qwen RGB's scoring, export and stress test.
+# Kaggle takes what needs NIR or the masks: Qwen NDVI cycle 2 (session 1 was cancelled before its first checkpoint)
+# with its scoring, export and stress test, and the heatmaps. Colab is off.
+GROUPS = ((["--only", "served", "export", "served-robustness", "--variants", "served-ndvi"], ["--only", "heatmaps"]) if KAGGLE
+          else (["--only", "blip", "robustness", "balanced"],
+                ["--only", "served", "export", "served-robustness", "--variants", "served-rgb"]))
 
 
 def slots() -> list[str]:
