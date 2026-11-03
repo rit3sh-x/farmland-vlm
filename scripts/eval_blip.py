@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from farmvlm import folds as F
+from farmvlm import folds as F, hub
 from farmvlm.evalset import eval_items
 from farmvlm.evaluate import predict, summarise, write
 from farmvlm.images import rgb_view
@@ -65,10 +65,15 @@ def main():
         return rgb_view(a.root, t.split[ti], t.tile[ti], VIEWS[t.row_view[row]])
 
     def run(reader, items, name, image=base, heldout=False, ranked=False):
+        # Each result is pushed as it lands and skipped on a rerun, so a recycled Colab VM loses one result, not the suite.
+        if (a.out / f"{name}.json").exists():
+            print(f"{name}: already scored", flush=True)
+            return
         t0 = time.time()
         rows = predict(reader, items, image, a.batch, heldout=heldout, ranked=ranked)
         m = summarise(rows, ranked=ranked)
         write(rows, m, a.out / name, field_of)
+        hub.push(a.out, a.out.name)
         print(f"{name}: {len(items)} items {time.time() - t0:.0f}s acc {m['vqa_generated']['accuracy']:.3f}", flush=True)
 
     if a.suite == "leakage":

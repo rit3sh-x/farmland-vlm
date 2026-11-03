@@ -111,6 +111,7 @@ def train_blip(name, a, task, **kw):
 
 def evaluate(name, a, script, *args, marker="f4.json"):
     if not fetch(name, marker):
+        hub.pull(name, RUNS)  # results an earlier VM pushed before it was recycled; the script skips them
         sh(sys.executable, CODE / "scripts" / script, "--stats", a.stats, "--root", a.root, "--out", RUNS / name, *args)
         hub.push(RUNS / name, name)
 
