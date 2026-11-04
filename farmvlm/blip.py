@@ -42,7 +42,7 @@ class BlipReader:
     def __init__(self, vqa=None, captioner=None, device="cuda", dtype=torch.float16, load=True, size=SIZE, beams=1, base="base"):
         self.device, self.dtype, self.beams = device, dtype, beams
         vqa_id, cap_id = BASES[base]
-        self.proc = processor(vqa_id, size)
+        self.proc = processor(vqa_id or cap_id, size)  # BLIP-large has no VQA checkpoint; the processors match
         self.cap_proc = processor(cap_id, size)
         self.hi_res = size != SIZE  # BLIP's position embeddings are for 384 px; other sizes interpolate them
         if vqa is None and load:
