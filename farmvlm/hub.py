@@ -8,7 +8,8 @@ import time
 from pathlib import Path
 
 REPO = os.environ.get("FARMVLM_HF_REPO", "DarkSlayer16/farmvlm-runs")
-RUNS = Path(os.environ.get("FARMVLM_RUNS", "/content/runs"))
+HOME = Path(os.environ.get("FARMVLM_HOME", "/content"))  # the VM's working root; svm-ws has no /content
+RUNS = HOME / "runs"
 
 
 def name_of(path: Path) -> str:

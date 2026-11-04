@@ -1,4 +1,5 @@
-"""Model inputs: any view of a tile as a 384 px RGB image, or as an NDVI map in the fixed colour ramp.
+"""Model inputs: any view of a tile as a square RGB image (384 px, BLIP's native size, unless asked), or as an NDVI map
+in the fixed colour ramp.
 
 The ramp and range are shared with the UI (red = stressed or bare, green = healthy), so the NDVI
 variant's second image is exactly what the user sees.
@@ -20,9 +21,9 @@ def _crop(a: np.ndarray, view: str) -> np.ndarray:
     return a[rs, cs]
 
 
-def rgb_view(root: Path, split: str, stem: str, view: str = "full") -> Image.Image:
+def rgb_view(root: Path, split: str, stem: str, view: str = "full", size: int = SIZE) -> Image.Image:
     a = np.asarray(Image.open(root / split / "images" / "rgb" / f"{stem}.jpg").convert("RGB"))
-    return Image.fromarray(_crop(a, view)).resize((SIZE, SIZE), Image.BICUBIC)
+    return Image.fromarray(_crop(a, view)).resize((size, size), Image.BICUBIC)
 
 
 def ndvi(rgb: np.ndarray, nir: np.ndarray) -> np.ndarray:

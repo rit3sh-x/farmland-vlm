@@ -14,11 +14,11 @@ from sklearn.model_selection import GroupShuffleSplit
 from torch.utils.data import DataLoader, IterableDataset, get_worker_info
 
 from farmvlm import folds as F
-from farmvlm import hub, loop
-from farmvlm.blip import CAPTION_ID, VQA_ID, BlipReader
+from farmvlm import hub, loop, track
+from farmvlm.blip import CAPTION_ID, VQA_ID, BlipReader, processor
 from farmvlm.evalset import eval_items
 from farmvlm.evaluate import predict, summarise
-from farmvlm.images import rgb_view
+from farmvlm.images import SIZE, rgb_view
 from farmvlm.items import caption_refs, render_question
 from farmvlm.sampler import Sampler
 from farmvlm.scheme import VIEWS
@@ -29,14 +29,15 @@ TARGETS = {
     "attn_qv": r".*\.(query|value|qkv)$",
     "all_linear": r"^(?!.*\bcls\b).*\.(query|key|value|qkv|projection|dense|fc1|fc2)$",
 }
+NORMS = ["layer_norm1", "layer_norm2", "post_layernorm", "LayerNorm"]  # every LayerNorm in BLIP's vision and text towers
 
 
 class Draws(IterableDataset):
     """An endless stream of (image, question, answer) from the balanced sampler; each worker draws with its own seed."""
 
-    def __init__(self, t, root, tiles, mix, seed, location_cell_share=None):
+    def __init__(self, t, root, tiles, mix, seed, location_cell_share=None, size=SIZE):
         self.t, self.root, self.tiles, self.mix, self.seed = t, root, tiles, mix, seed
-        self.location_cell_share = location_cell_share
+        self.location_cell_share, self.size = location_cell_share, size
 
     def __iter__(self):
         wid = get_worker_info().id if get_worker_info() else 0
@@ -45,7 +46,7 @@ class Draws(IterableDataset):
         while True:
             item = s.draw()
             ti = self.t.row_tile[item.row]
-            img = rgb_view(self.root, self.t.split[ti], self.t.tile[ti], VIEWS[self.t.row_view[item.row]])
+            img = rgb_view(self.root, self.t.split[ti], self.t.tile[ti], VIEWS[self.t.row_view[item.row]], self.size)
             if item.family == "caption":
                 refs = caption_refs(item)
                 yield img, "", refs[rng.integers(len(refs))]
@@ -64,15 +65,15 @@ def split_tiles(t, how, fold_index, seed):
     return np.flatnonzero((fold != fold_index) & ~inner), np.flatnonzero(inner)
 
 
-def build_model(task, rank, alpha, targets, dora, resume=None):
+def build_model(task, rank, alpha, targets, dora, resume=None, dropout=0.05, train_norms=False):
     from transformers import BlipForConditionalGeneration, BlipForQuestionAnswering
     base = (BlipForQuestionAnswering.from_pretrained(VQA_ID) if task == "vqa"
             else BlipForConditionalGeneration.from_pretrained(CAPTION_ID)).to("cuda").half()
     if resume:
         model = PeftModel.from_pretrained(base, resume, is_trainable=True)
     else:
-        model = get_peft_model(base, LoraConfig(r=rank, lora_alpha=alpha, lora_dropout=0.05,
-                                                target_modules=TARGETS[targets], use_dora=dora))
+        model = get_peft_model(base, LoraConfig(r=rank, lora_alpha=alpha, lora_dropout=dropout, target_modules=TARGETS[targets],
+                                                use_dora=dora, modules_to_save=NORMS if train_norms else None))
     for p in model.parameters():
         if p.requires_grad:
             p.data = p.data.float()
@@ -92,15 +93,17 @@ def collate(proc, task, bos):
     return fn
 
 
-def loss_of(model, task):
+def loss_of(model, task, hi_res=False):
     def fn(x):
         x = {k: v.to("cuda") for k, v in x.items()}
         labels = x["answer_ids"].masked_fill(x["answer_mask"] == 0, -100)
         pv = x["pixel_values"].half()
         if task == "vqa":
             return model(input_ids=x["input_ids"], attention_mask=x["attention_mask"], pixel_values=pv,
-                         decoder_input_ids=x["answer_ids"], decoder_attention_mask=x["answer_mask"], labels=labels).loss
-        return model(pixel_values=pv, input_ids=x["answer_ids"], attention_mask=x["answer_mask"], labels=labels).loss
+                         decoder_input_ids=x["answer_ids"], decoder_attention_mask=x["answer_mask"], labels=labels,
+                         interpolate_pos_encoding=hi_res).loss
+        return model(pixel_values=pv, input_ids=x["answer_ids"], attention_mask=x["answer_mask"], labels=labels,
+                     interpolate_pos_encoding=hi_res).loss
     return fn
 
 
@@ -118,6 +121,9 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--targets", choices=list(TARGETS), default="attn_qv")
     ap.add_argument("--dora", action="store_true")
+    ap.add_argument("--dropout", type=float, default=0.05, help="LoRA dropout")
+    ap.add_argument("--train-norms", action="store_true", help="also train every LayerNorm (saved with the adapter)")
+    ap.add_argument("--size", type=int, default=SIZE, help="input px; BLIP was pretrained at 384, tiles are 512")
     ap.add_argument("--pairs", type=int, default=120_000)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--eval-every", type=int, default=5000)
@@ -134,11 +140,11 @@ def main():
     train_tiles, val_pool = split_tiles(t, a.split, a.fold, a.seed)
     val_tiles = np.random.default_rng(a.seed).choice(val_pool, min(a.val_tiles, len(val_pool)), replace=False)
     val_items = [i for i in eval_items(t, val_tiles, np.array([], int)) if (i.family == "caption") == (a.task == "caption")]
-    from transformers import BlipProcessor
-    proc = BlipProcessor.from_pretrained(VQA_ID if a.task == "vqa" else CAPTION_ID)
-    model = build_model(a.task, a.rank, a.alpha, a.targets, a.dora, a.resume)
-    reader = BlipReader(vqa=model if a.task == "vqa" else None, captioner=model if a.task == "caption" else None, load=False)
-    image = lambda r: rgb_view(a.root, t.split[t.row_tile[r]], t.tile[t.row_tile[r]], VIEWS[t.row_view[r]])
+    proc = processor(VQA_ID if a.task == "vqa" else CAPTION_ID, a.size)
+    model = build_model(a.task, a.rank, a.alpha, a.targets, a.dora, a.resume, a.dropout, a.train_norms)
+    reader = BlipReader(vqa=model if a.task == "vqa" else None, captioner=model if a.task == "caption" else None, load=False,
+                        size=a.size)
+    image = lambda r: rgb_view(a.root, t.split[t.row_tile[r]], t.tile[t.row_tile[r]], VIEWS[t.row_view[r]], a.size)
     key = "vqa_generated" if a.task == "vqa" else "caption_facts"
 
     def validate():
@@ -153,12 +159,14 @@ def main():
                trainable=sum(p.numel() for p in model.parameters() if p.requires_grad))
     (a.out / "config.json").write_text(json.dumps(cfg, indent=1))
     mix = "blip_vqa" if a.task == "vqa" else "blip_caption"
-    dl = DataLoader(Draws(t, a.root, train_tiles, mix, a.seed + (7919 if a.resume else 0), a.location_cell_share), batch_size=a.batch, num_workers=2,
+    dl = DataLoader(Draws(t, a.root, train_tiles, mix, a.seed + (7919 if a.resume else 0), a.location_cell_share, a.size),
+                    batch_size=a.batch, num_workers=2,
                     collate_fn=collate(proc, a.task, model.config.text_config.bos_token_id), prefetch_factor=4)
-    loop.run(model, dl, loss_of(model, a.task), validate,
+    loop.run(model, dl, loss_of(model, a.task, a.size != SIZE), validate,
              loop.LoopConfig(out=a.out, pairs=a.pairs, batch=a.batch, lr=a.lr, eval_every=a.eval_every,
                              patience=a.patience, resume=a.resume,
-                             on_checkpoint=lambda: hub.push(a.out, hub.name_of(a.out))))
+                             on_checkpoint=lambda: hub.push(a.out, hub.name_of(a.out)),
+                             on_log=track.start(hub.name_of(a.out), cfg)))
 
 
 if __name__ == "__main__":

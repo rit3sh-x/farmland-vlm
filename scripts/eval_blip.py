@@ -25,7 +25,7 @@ from farmvlm.stats import StatsTable
 ROBUST_TILES = 500
 
 
-def load_reader(vqa_adapter, cap_adapter):
+def load_reader(vqa_adapter, cap_adapter, beams=1):
     import torch
     from peft import PeftModel
     from transformers import BlipForConditionalGeneration, BlipForQuestionAnswering
@@ -36,7 +36,7 @@ def load_reader(vqa_adapter, cap_adapter):
         vqa = PeftModel.from_pretrained(vqa, vqa_adapter).merge_and_unload()
     if cap_adapter:
         cap = PeftModel.from_pretrained(cap, cap_adapter).merge_and_unload()
-    return BlipReader(vqa=vqa.half().cuda().eval(), captioner=cap.half().cuda().eval())
+    return BlipReader(vqa=vqa.half().cuda().eval(), captioner=cap.half().cuda().eval(), beams=beams)
 
 
 def main():
@@ -50,6 +50,7 @@ def main():
     ap.add_argument("--caption-adapter", help="path, may contain {fold}")
     ap.add_argument("--suite", choices=["clean", "robustness", "leakage"], default="clean")
     ap.add_argument("--batch", type=int, default=48)
+    ap.add_argument("--beams", type=int, default=1, help="beam search width for generated answers and captions (1: greedy)")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     sha = subprocess.run(["git", "-C", str(Path(__file__).parent), "rev-parse", "--short", "HEAD"],
@@ -77,7 +78,7 @@ def main():
         print(f"{name}: {len(items)} items {time.time() - t0:.0f}s acc {m['vqa_generated']['accuracy']:.3f}", flush=True)
 
     if a.suite == "leakage":
-        reader = load_reader(a.vqa_adapter, a.caption_adapter)
+        reader = load_reader(a.vqa_adapter, a.caption_adapter, a.beams)
         train_fields = set(t.field[t.split == "train"])
         val = np.flatnonzero(t.split == "val")
         seen = np.array([t.field[i] in train_fields for i in val])
@@ -88,7 +89,7 @@ def main():
         return
     for f in a.folds:
         fmt = lambda p: p.format(fold=f) if p else None
-        reader = load_reader(fmt(a.vqa_adapter), fmt(a.caption_adapter))
+        reader = load_reader(fmt(a.vqa_adapter), fmt(a.caption_adapter), a.beams)
         tiles = F.pick_test_sample(t, fold, f, a.seed)
         if a.suite == "clean":
             run(reader, eval_items(t, tiles, F.clean_views(t, np.flatnonzero(fold == f), a.seed)), f"f{f}", ranked=True)

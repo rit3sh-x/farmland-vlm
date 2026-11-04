@@ -1,11 +1,13 @@
 """BLIP readers for the Baseline and BLIP-LoRA: generated answers, ranked answers and captions, each with a confidence.
 
-Confidence is the geometric mean of the generated tokens' probabilities; for ranked answers it is the
-softmax over the candidates' sequence log-likelihoods. Answer and caption sequences start with BLIP's
+Confidence is the geometric mean of the generated tokens' probabilities (with beam search, the beam's
+length-normalised probability); for ranked answers it is the softmax over the candidates' sequence log-likelihoods. Answer and caption sequences start with BLIP's
 [DEC] token, as HF's generate does, so scoring, generation and training see the same sequences.
 """
 import torch
 from transformers import BlipForConditionalGeneration, BlipForQuestionAnswering, BlipProcessor
+
+from farmvlm.images import SIZE
 
 VQA_ID = "Salesforce/blip-vqa-base"
 CAPTION_ID = "Salesforce/blip-image-captioning-base"
@@ -24,13 +26,21 @@ def _geo_mean_prob(scores, sequences, start: int) -> list[float]:
     return out
 
 
+def processor(model_id: str, size: int = SIZE) -> BlipProcessor:
+    """BLIP's processor, resizing to `size` px rather than its native 384."""
+    proc = BlipProcessor.from_pretrained(model_id)
+    proc.image_processor.size = {"height": size, "width": size}
+    return proc
+
+
 class BlipReader:
     """Pass models to wrap them (e.g. a PEFT model during validation); missing ones load from the Hub unless load=False."""
 
-    def __init__(self, vqa=None, captioner=None, device="cuda", dtype=torch.float16, load=True):
-        self.device, self.dtype = device, dtype
-        self.proc = BlipProcessor.from_pretrained(VQA_ID)
-        self.cap_proc = BlipProcessor.from_pretrained(CAPTION_ID)
+    def __init__(self, vqa=None, captioner=None, device="cuda", dtype=torch.float16, load=True, size=SIZE, beams=1):
+        self.device, self.dtype, self.beams = device, dtype, beams
+        self.proc = processor(VQA_ID, size)
+        self.cap_proc = processor(CAPTION_ID, size)
+        self.hi_res = size != SIZE  # BLIP's position embeddings are for 384 px; other sizes interpolate them
         if vqa is None and load:
             vqa = BlipForQuestionAnswering.from_pretrained(VQA_ID, dtype=dtype).to(device).eval()
         if captioner is None and load:
@@ -46,14 +56,20 @@ class BlipReader:
     @torch.no_grad()
     def answer(self, images, questions, max_new_tokens=10):
         x = self._inputs(images, questions)
-        out = self.vqa.generate(**x, max_new_tokens=max_new_tokens, output_scores=True, return_dict_in_generate=True)
+        out = self.vqa.generate(**x, max_new_tokens=max_new_tokens, output_scores=True, return_dict_in_generate=True,
+                                interpolate_pos_encoding=self.hi_res, num_beams=self.beams)
         text = self.proc.batch_decode(out.sequences, skip_special_tokens=True)
-        return list(zip([t.strip() for t in text], _geo_mean_prob(out.scores, out.sequences, 1)))
+        return list(zip([t.strip() for t in text], self._conf(out)))
+
+    def _conf(self, out):
+        if self.beams > 1:
+            return out.sequences_scores.float().exp().tolist()
+        return _geo_mean_prob(out.scores, out.sequences, 1)
 
     @torch.no_grad()
     def question_states(self, images, questions):
         x = self._inputs(images, questions)
-        img = self.vqa.vision_model(pixel_values=x["pixel_values"])[0]
+        img = self.vqa.vision_model(pixel_values=x["pixel_values"], interpolate_pos_encoding=self.hi_res)[0]
         q = self.vqa.text_encoder(input_ids=x["input_ids"], attention_mask=x["attention_mask"],
                                   encoder_hidden_states=img,
                                   encoder_attention_mask=torch.ones(img.shape[:-1], dtype=torch.long, device=self.device))[0]
@@ -83,6 +99,7 @@ class BlipReader:
     def caption(self, images, max_new_tokens=40):
         x = self.cap_proc(images=images, return_tensors="pt").to(self.device)
         out = self.cap.generate(pixel_values=x["pixel_values"].to(self.dtype), max_new_tokens=max_new_tokens,
-                                output_scores=True, return_dict_in_generate=True)
+                                output_scores=True, return_dict_in_generate=True, interpolate_pos_encoding=self.hi_res,
+                                num_beams=self.beams)
         text = self.cap_proc.batch_decode(out.sequences, skip_special_tokens=True)
-        return list(zip([t.strip() for t in text], _geo_mean_prob(out.scores, out.sequences, 1)))
+        return list(zip([t.strip() for t in text], self._conf(out)))

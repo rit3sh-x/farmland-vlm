@@ -5,7 +5,7 @@ from its last pushed checkpoint.
     HF_TOKEN=... python scripts/pipeline.py --stats /content/stats.npz --root /content/av/Agriculture-Vision-2021
     python scripts/pipeline.py ... --only baseline sweep
 
-Stages: baseline sweep bakeoff blip robustness heatmaps leakage dora balanced served export served-robustness.
+Stages: baseline sweep bakeoff blip robustness heatmaps leakage dora balanced study served export served-robustness.
 """
 import argparse
 import json
@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from farmvlm import hub  # noqa: E402
 
-RUNS = Path("/content/runs")
+RUNS = hub.RUNS
 CODE = Path(__file__).resolve().parent.parent
 SWEEP = {"rank": [4, 8, 16, 32, 64], "lr": [5e-5, 1e-4, 2e-4, 5e-4], "targets": ["text_attn", "attn_qv", "all_linear"]}
 START = {"rank": 16, "lr": 1e-4, "targets": "attn_qv"}
@@ -25,6 +25,17 @@ START = {"rank": 16, "lr": 1e-4, "targets": "attn_qv"}
 # (identify 0.34 -> 0.00 by 20k pairs). Final runs take the sweep choice with the LR capped here; the sweep
 # scored 2e-4 within a point of 5e-4.
 FINAL_LR_CAP = 2e-4
+# The hyperparameter study (evaluator review, 2026-11-04): one setting at a time from the final recipe, both tasks on
+# fold 0, 30k pairs each, scored on 1,000 inner-validation tiles every 10k pairs. The 10k-pair sweep stopped at its top
+# rank while still rising, never varied alpha, dropout, LayerNorm or input size, and tried all_linear only at an LR that
+# derails long runs; 300 validation tiles left 1-3 point effects inside the noise. Each trial is a run on the Hub.
+STUDY_REF = {"rank": 64, "lr": FINAL_LR_CAP, "targets": "attn_qv"}
+STUDY = {"ref": {}, "rank128": {"rank": 128}, "rank256": {"rank": 256},
+         "alpha1x": {"alpha": 64}, "alpha4x": {"alpha": 256},
+         "dropout0": {"dropout": 0.0}, "dropout0.1": {"dropout": 0.1}, "dropout0.2": {"dropout": 0.2},
+         "all_linear-lr1e-4": {"targets": "all_linear", "lr": 1e-4}, "all_linear-lr2e-4": {"targets": "all_linear"},
+         "norms": {"train_norms": True}, "size512": {"size": 512}}
+STUDY_PAIRS, STUDY_EVAL_EVERY, STUDY_VAL_TILES = 30_000, 10_000, 1000
 SERVED_PAIRS = 30_000  # per cycle: Qwen3.5-2B trains at ~146 min per 10k pairs on a T4
 # Cycle 2 restarts the cosine schedule from cycle 1's best adapter (its validation was still rising at 30k pairs).
 SERVED_CYCLES = 2
@@ -191,6 +202,14 @@ def main():
         train_blip("blip-vqa-f0-balanced", a, "vqa", fold=0, rank=c["rank"], lr=c["lr"], targets=c["targets"], pairs=120_000,
                    patience=99, location_cell_share=0.65)
         evaluate("balanced", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", adapter("blip-vqa-f0-balanced"),
+                 "--caption-adapter", adapter("blip-caption-f0"), marker="f0.json")
+    if want("study"):
+        for trial, change in STUDY.items():
+            for t in ("vqa", "caption"):
+                train_blip(f"study-{t}/{trial}", a, t, fold=0, **{**STUDY_REF, **change}, pairs=STUDY_PAIRS,
+                           eval_every=STUDY_EVAL_EVERY, val_tiles=STUDY_VAL_TILES, patience=99)
+        # Decoding needs no training: the cycle-2 fold-0 adapters with beam search, against blip-lora/f0 (greedy)
+        evaluate("study-decode-beams3", a, "eval_blip.py", "--folds", 0, "--beams", 3, "--vqa-adapter", adapter("blip-vqa-f0"),
                  "--caption-adapter", adapter("blip-caption-f0"), marker="f0.json")
     if want("served"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())

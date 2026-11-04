@@ -25,6 +25,7 @@ class LoopConfig:
     patience: int = 3
     resume: Path | None = None
     on_checkpoint: object = None  # called after each checkpoint is written (e.g. push to the Hub)
+    on_log: object = None  # called with each validation record (e.g. a Trackio dashboard)
 
 
 def run(model, batches, loss_fn, validate, cfg: LoopConfig):
@@ -68,6 +69,8 @@ def run(model, batches, loss_fn, validate, cfg: LoopConfig):
                "skipped_steps": int(skipped), "minutes": round((time.time() - t0) / 60, 1)}
         log.write(json.dumps(rec) + "\n"); log.flush()
         print(json.dumps(rec), flush=True)
+        if cfg.on_log:
+            cfg.on_log(rec)
         if pairs >= cfg.pairs // 2 and score > state["best"]:
             state["best"], state["since_best"] = score, 0
             model.save_pretrained(cfg.out / "best")

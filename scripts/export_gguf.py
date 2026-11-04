@@ -12,11 +12,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from farmvlm.hub import HOME  # noqa: E402
 from farmvlm.vlm import MODELS  # noqa: E402
 
 LCPP_TAG = "b11719"
-LCPP = Path("/content/llama.cpp")
-LBIN = Path(f"/content/llamabin/llama-{LCPP_TAG}")
+LCPP = HOME / "llama.cpp"
+LBIN = HOME / "llamabin" / f"llama-{LCPP_TAG}"
 LBIN_URL = f"https://github.com/ggml-org/llama.cpp/releases/download/{LCPP_TAG}/llama-{LCPP_TAG}-bin-ubuntu-x64.zip"
 
 
@@ -31,8 +32,8 @@ def tools(binaries: bool):
         # stage on the VM. The converter needs only gguf-py (on PYTHONPATH in sh) and what the VM already has.
         sh(f"git clone -q --depth 1 --branch {LCPP_TAG} https://github.com/ggml-org/llama.cpp {LCPP}")
     if binaries and not LBIN.exists():
-        sh(f"mkdir -p /content/llamabin && cd /content/llamabin && curl -sL -o lb.zip {LBIN_URL} && unzip -q lb.zip")
-        found = next(Path("/content/llamabin").rglob("llama-quantize"))
+        sh(f"mkdir -p {LBIN.parent} && cd {LBIN.parent} && curl -sL -o lb.zip {LBIN_URL} && unzip -q lb.zip")
+        found = next(LBIN.parent.rglob("llama-quantize"))
         LBIN.parent.mkdir(parents=True, exist_ok=True)
         if found.parent != LBIN:
             os.symlink(found.parent, LBIN)

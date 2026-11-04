@@ -1,10 +1,10 @@
-"""Kaggle (GPU T4 x2) and molab (one 96 GB Blackwell) entry point: two pipelines over disjoint stages in parallel,
-one per GPU, or both on one card with room for them, so no card idles.
+"""Multi-GPU entry point for Kaggle (T4 x2), molab (one 96 GB Blackwell) and the svm-ws workstation (one 48 GB
+Blackwell): pipelines over disjoint stages in parallel, one per GPU or several on one card with room for them.
 
-    python3 scripts/kaggle.py --stats /content/stats.npz --root /content/av/Agriculture-Vision-2021
+    [FARMVLM_MACHINE=workstation] python3 scripts/kaggle.py --stats /content/stats.npz --root /content/av/Agriculture-Vision-2021
 
 The notebook cell only fetches the code and runs this, so what a run does is set here, in the repo.
-Logs: pipeline-<N>.out in /kaggle/working on Kaggle, /content on molab, one per pipeline.
+Logs: pipeline-<N>.out in /kaggle/working on Kaggle, else in FARMVLM_HOME, one per GPU slot.
 """
 import os
 import shlex
@@ -14,30 +14,35 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipeline import CODE, visible_gpus  # noqa: E402
+from farmvlm.hub import HOME  # noqa: E402
 
-KAGGLE = Path("/kaggle/working").exists()
-LOGS = Path("/kaggle/working" if KAGGLE else "/content")
+MACHINE = os.environ.get("FARMVLM_MACHINE") or ("kaggle" if Path("/kaggle/working").exists() else "molab")
+LOGS = Path("/kaggle/working") if MACHINE == "kaggle" else HOME
 GROUP_MIB = 20_000  # a T4-sized pipeline peaks under 16 GB
 
-# Pipeline arguments per GPU slot, run in parallel; with fewer slots than groups, the groups queue on the slots there are.
-# What remains after Kaggle session 1, split by machine so the two can run at once on disjoint runs. molab extracts
-# only the RGB images (its sandbox died extracting all 21 GB), so it takes every RGB stage: the BLIP caption folds 3-4,
-# the five-fold scoring, fold-0 robustness and balanced scoring beside Qwen RGB's scoring, export and stress test.
-# Kaggle takes what needs NIR or the masks: Qwen NDVI cycle 2 (session 1 was cancelled before its first checkpoint)
-# with its scoring, export and stress test, and the heatmaps. Colab is off.
-GROUPS = ((["--only", "served", "export", "served-robustness", "--variants", "served-ndvi"], ["--only", "heatmaps"]) if KAGGLE
-          else (["--only", "blip", "robustness", "balanced"],
-                ["--only", "served", "export", "served-robustness", "--variants", "served-rgb"]))
+# Pipeline arguments per group; groups run in parallel, one per GPU slot, and queue when there are more groups than slots.
+# Kaggle and molab split what remained after Kaggle session 1 so both could run at once on disjoint runs: molab extracts
+# only the RGB images (its sandbox died extracting all 21 GB) and takes every RGB stage; Kaggle takes what needs NIR or
+# the masks. The workstation (from 2026-11-04, Colab off) takes everything left: the BLIP scoring and suites, then the
+# hyperparameter study on one slot; Qwen RGB scoring and export, then Qwen NDVI cycle 2 last, on the other.
+GROUPS = {
+    "kaggle": (["--only", "served", "export", "served-robustness", "--variants", "served-ndvi"], ["--only", "heatmaps"]),
+    "molab": (["--only", "blip", "robustness", "balanced"],
+              ["--only", "served", "export", "served-robustness", "--variants", "served-rgb"]),
+    "workstation": (["--only", "blip", "robustness", "heatmaps", "balanced"],
+                    ["--only", "served", "export", "served-robustness", "--variants", "served-rgb"],
+                    ["--only", "study"],
+                    ["--only", "served", "export", "served-robustness", "--variants", "served-ndvi"]),
+}[MACHINE]
 
 
 def slots() -> list[str]:
-    """The GPU of each parallel pipeline: one per card, or every group on a single card with memory for them all."""
+    """The GPU of each parallel pipeline: one per card, or as many on a single card as its memory holds."""
     gpus = visible_gpus()
     if len(gpus) == 1:
         mib = int(subprocess.run(["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
                                  capture_output=True, text=True).stdout.split()[0])
-        if mib >= GROUP_MIB * len(GROUPS):
-            return gpus * len(GROUPS)
+        return gpus * max(1, min(len(GROUPS), mib // GROUP_MIB))
     return gpus
 
 
