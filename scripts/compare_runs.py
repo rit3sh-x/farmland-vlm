@@ -24,10 +24,12 @@ FAMILIES = ("presence", "identify", "extent", "location")
 
 
 def best_check(run: Path) -> Path:
-    """The prediction file of the run's best validation check, as the loop chose it (second half of training only)."""
+    """The prediction file of the run's best validation check, as the loop chose it (second half of training only; a
+    running trial still in its first half gives its latest check)."""
     pairs = json.loads((run / "config.json").read_text())["pairs"]
     rows = [json.loads(x) for x in open(run / "metrics.jsonl")]
-    k = max((i for i, r in enumerate(rows) if r["pairs"] >= pairs // 2), key=lambda i: rows[i]["val"])
+    late = [i for i, r in enumerate(rows) if r["pairs"] >= pairs // 2]
+    k = max(late, key=lambda i: rows[i]["val"]) if late else len(rows) - 1
     return run / "val" / f"{k:02d}.jsonl"
 
 
