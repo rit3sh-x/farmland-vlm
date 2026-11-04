@@ -128,3 +128,13 @@ Cycle 2's caption fix (targets the model can end) is worth 18.5 points of fact F
   - two training-seed replicates of the reference on the same validation items (`--train-seed` seeds LoRA init and the training draws, while `--seed` still fixes folds and items)
   - rank 256 at 120k pairs, compared with the 120k trial, to test whether its gain survives longer training
 - Validation (62.6) and the held-out fold-0 score of the same recipe (67.6) use different items. Only paired comparisons on the same items are compared.
+
+## 2026-11-05 00:05: no BLIP-large VQA checkpoint exists; rank and seed noise
+
+- **BLIP-large VQA is not on the Hub.**
+  - `Salesforce/blip-vqa-capfilt-large` stores the same `pytorch_model.bin` as `blip-vqa-base` (sha256 `d47763c493a0…`), with a ViT-B config (768 hidden, 12 layers).
+  - The study's large VQA trial therefore trained the base model and reproduced the reference's validation predictions byte for byte.
+  - **Decision:** BLIP-large is captioning only. `blip-image-captioning-large` is a genuine ViT-L (1.88 GB), and its trial is running. Training now refuses a task with no checkpoint, and the invalid run is set aside.
+- **Training is deterministic.** Those two runs of one recipe and seed, built from different commits, agree on every one of the 5,098 validation items. Any difference between trials comes from the change or from the training seed.
+- **Rank:** VQA 58.2 at rank 64, 58.9 at 128 (+0.7 [+0.0, +1.4]) and 59.5 at 256 (+1.3 [+0.5, +2.1]). That is monotone, about +0.65 per doubling. Captions at rank 128 reach fact F1 74.0 (+1.9).
+- **Seed noise:** the reference retrained with training seed 1 scores 57.6 (−0.6 [−2.0, +0.8]). A second seed is running. Rank 256's gain is about twice this run-to-run spread.
