@@ -33,8 +33,10 @@ FINAL_LR_CAP = 2e-4
 # on validation only: the held-out folds score the final recipe and never choose it.
 STUDY_REF = {"rank": 64, "lr": FINAL_LR_CAP, "targets": "attn_qv"}
 VQA, BOTH = ("vqa",), ("vqa", "caption")
-STUDY = [("ref", {}, BOTH), ("size512", {"size": 512}, BOTH), ("large", {"base": "large"}, BOTH),
-         ("rank128", {"rank": 128}, BOTH), ("nrg", {"bands": "nrg"}, BOTH),
+# The memory-heavy trials (size512 peaks at 19 GB, against 8 GB at 384 px; BLIP-large) share a third of the list, so the
+# three parallel parts (--study-part k/3 takes every third trial) never run them at once beside Qwen training.
+STUDY = [("ref", {}, BOTH), ("size512", {"size": 512}, BOTH), ("rank128", {"rank": 128}, BOTH),
+         ("nrg", {"bands": "nrg"}, BOTH), ("large", {"base": "large"}, BOTH),
          ("all_linear-lr1e-4", {"targets": "all_linear", "lr": 1e-4}, BOTH), ("rank256", {"rank": 256}, VQA),
          ("all_linear-lr2e-4", {"targets": "all_linear"}, VQA), ("norms", {"train_norms": True}, VQA),
          ("alpha1x", {"alpha": 64}, VQA), ("alpha4x", {"alpha": 256}, VQA),
