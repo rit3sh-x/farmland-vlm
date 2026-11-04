@@ -33,11 +33,14 @@ def best_check(run: Path) -> Path:
     return run / "val" / f"{k:02d}.jsonl"
 
 
-def load(path: Path) -> dict:
-    """item key -> record, keyed so the same question about the same view matches across models."""
+def load(path: Path, ranked: bool = False) -> dict:
+    """item key -> record, keyed so the same question about the same view matches across models. ranked: VQA answers
+    are the ranked readout's (files scored with it carry both)."""
     out = {}
     for line in open(path):
         r = json.loads(line)
+        if ranked and r["family"] != "caption":
+            r["pred"] = r["ranked"]
         out[(r["row"], r["family"], r.get("cls"), r.get("question"))] = r
     return out
 
@@ -66,8 +69,8 @@ def family_mean_ci(diff: np.ndarray, fam: np.ndarray, field: np.ndarray, n: int 
     return point, float(np.percentile(boot, 2.5)), float(np.percentile(boot, 97.5))
 
 
-def compare(a_path: Path, b_path: Path) -> dict:
-    a, b = load(a_path), load(b_path)
+def compare(a_path: Path, b_path: Path, ranked: bool = False) -> dict:
+    a, b = load(a_path, ranked), load(b_path, ranked)
     keys = sorted(a.keys() & b.keys(), key=str)
     assert keys, f"no shared items between {a_path} and {b_path}"
     fam = np.array([a[k]["family"] for k in keys])
@@ -109,14 +112,15 @@ def main():
     ap.add_argument("b", nargs="?")
     ap.add_argument("--runs", type=Path, default=Path("runs"))
     ap.add_argument("--checks", action="store_true", help="every validation check of run A against its last one")
+    ap.add_argument("--ranked", action="store_true", help="compare the ranked VQA readout instead of the generated one")
     a = ap.parse_args()
     resolve = lambda x: Path(x) if x.endswith(".jsonl") else best_check(a.runs / x)
     if a.checks:
         files = sorted((a.runs / a.a / "val").glob("*.jsonl"))
         for f in files[:-1]:
-            show(f.name, files[-1].name, compare(f, files[-1]))
+            show(f.name, files[-1].name, compare(f, files[-1], a.ranked))
         return
-    show(a.a, a.b, compare(resolve(a.a), resolve(a.b)))
+    show(a.a, a.b, compare(resolve(a.a), resolve(a.b), a.ranked))
 
 
 if __name__ == "__main__":

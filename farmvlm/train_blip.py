@@ -115,6 +115,17 @@ def loss_of(model, task, hi_res=False):
     return fn
 
 
+def validation_items(t, split, fold, seed, n, protocol):
+    """The fold's inner-validation items. random: n tiles at random (the study's set). test: the held-out sample's rules
+    at n tiles (the rarest classes' tiles first, then random, plus anomaly-free quadrant views in the same proportion),
+    so a choice made on validation weighs rare classes as the held-out score does."""
+    _, pool = split_tiles(t, split, fold, seed)
+    if protocol == "test":
+        tiles = F.pick_test_sample(t, None, None, seed, n, per_class=n // 40, pool=pool)
+        return eval_items(t, tiles, F.clean_views(t, pool, seed, n=round(n * 0.15)))
+    return eval_items(t, np.random.default_rng(seed).choice(pool, min(n, len(pool)), replace=False), np.array([], int))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", choices=["vqa", "caption"], required=True)
@@ -143,20 +154,25 @@ def main():
     ap.add_argument("--eval-every", type=int, default=5000)
     ap.add_argument("--patience", type=int, default=3)
     ap.add_argument("--val-tiles", type=int, default=300)
+    ap.add_argument("--val-protocol", choices=["random", "test"], default="random", help="see validation_items")
+    ap.add_argument("--select", choices=["generated", "ranked"], default="generated",
+                    help="VQA readout that scores each check and so picks the best checkpoint")
     ap.add_argument("--location-cell-share", type=float, help="share of location draws answered by a grid cell (default: the natural mix)")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--resume", type=Path)
     a = ap.parse_args()
     if BASES[a.base][a.task == "caption"] is None:
         ap.error(f"no BLIP-{a.base} checkpoint for {a.task}")
+    if a.select == "ranked" and a.task == "caption":
+        ap.error("--select ranked is for VQA")
     a.alpha = a.alpha or 2 * a.rank
     a.train_seed = a.seed if a.train_seed is None else a.train_seed
     a.out.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(a.train_seed)
     t = StatsTable.load(a.stats)
-    train_tiles, val_pool = split_tiles(t, a.split, a.fold, a.seed)
-    val_tiles = np.random.default_rng(a.seed).choice(val_pool, min(a.val_tiles, len(val_pool)), replace=False)
-    val_items = [i for i in eval_items(t, val_tiles, np.array([], int)) if (i.family == "caption") == (a.task == "caption")]
+    train_tiles, _ = split_tiles(t, a.split, a.fold, a.seed)
+    val_items = [i for i in validation_items(t, a.split, a.fold, a.seed, a.val_tiles, a.val_protocol)
+                 if (i.family == "caption") == (a.task == "caption")]
     proc = processor(BASES[a.base][a.task == "caption"], a.size)
     model = build_model(a.task, a.rank, a.alpha, a.targets, a.dora, a.resume, a.dropout, a.train_norms, a.base)
     reader = BlipReader(vqa=model if a.task == "vqa" else None, captioner=model if a.task == "caption" else None, load=False,
@@ -170,13 +186,14 @@ def main():
         Every check keeps its per-item predictions (val/NN.jsonl): trials share the validation items, so any two
         checkpoints or runs compare item by item."""
         nonlocal checks
+        ranked = a.select == "ranked"
         with torch.autocast("cuda", dtype=torch.float16):  # as in training: trained LayerNorm copies are fp32
-            rows = predict(reader, val_items, image)
-        full = summarise(rows)
+            rows = predict(reader, val_items, image, ranked=ranked)
+        full = summarise(rows, ranked=ranked)
         (a.out / "val").mkdir(exist_ok=True)
         write(rows, full, a.out / "val" / f"{checks:02d}", lambda r: str(t.field[t.row_tile[r]]))
         checks += 1
-        m = full[key]
+        m = full["vqa_ranked" if ranked else key]
         with open(a.out / "val.jsonl", "a") as f:
             f.write(json.dumps(m) + "\n")
         return float(np.mean(list(m["by_family"].values()))) if a.task == "vqa" else m["f1"]

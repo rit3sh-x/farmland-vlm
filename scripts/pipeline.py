@@ -53,6 +53,10 @@ STUDY2 = [("ref-seed1", {"train_seed": 1}, VQA), ("ref-seed2", {"train_seed": 2}
           ("all_linear-lr2e-4-pairs120k", {"targets": "all_linear", "pairs": 120_000}, VQA),
           ("pairs120k-seed1", {"pairs": 120_000, "train_seed": 1}, VQA)]
 STUDY_PAIRS, STUDY_VAL_TILES = 30_000, 1000
+# Cycle 3, from the study: the cycle-2 recipe at 240k pairs. Length was the one change that raised the ceiling (+1.1 over
+# 120k on validation); rank, alpha, all_linear, dropout, LayerNorm, 512 px and NRG did not at length or beyond seed noise.
+# Checks score the ranked readout (chosen on validation) on a validation draw made by the held-out sample's rules.
+CYCLE3 = {**STUDY_REF, "pairs": 240_000}
 SERVED_PAIRS = 30_000  # per cycle: Qwen3.5-2B trains at ~146 min per 10k pairs on a T4
 # Cycle 2 restarts the cosine schedule from cycle 1's best adapter (its validation was still rising at 30k pairs).
 SERVED_CYCLES = 2
@@ -232,6 +236,13 @@ def main():
         # Decoding needs no training: the cycle-2 fold-0 adapters with beam search, against blip-lora/f0 (greedy)
         evaluate("study-decode-beams3", a, "eval_blip.py", "--folds", 0, "--beams", 3, "--vqa-adapter", adapter("blip-vqa-f0"),
                  "--caption-adapter", adapter("blip-caption-f0"), marker="f0.json")
+    if want("cycle3"):
+        for f in a.folds:
+            train_blip(f"c3-vqa-f{f}", a, "vqa", fold=f, **CYCLE3, eval_every=40_000, val_tiles=STUDY_VAL_TILES,
+                       val_protocol="test", select="ranked", patience=99)
+        # Captions keep cycle 2's adapters: the study tuned VQA, the primary metric.
+        evaluate("c3-blip", a, "eval_blip.py", "--folds", *a.folds, "--vqa-adapter", RUNS / "c3-vqa-f{fold}" / "best",
+                 "--caption-adapter", RUNS / "blip-caption-f{fold}" / "best", marker=f"f{a.folds[-1]}.json")
     if want("served"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
         extra = ["--vision"] if b["merged_route"] else []

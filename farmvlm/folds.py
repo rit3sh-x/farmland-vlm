@@ -50,11 +50,13 @@ def inner_validation(t: StatsTable, fold: np.ndarray, f: int, seed: int, share: 
     return mask
 
 
-def pick_test_sample(t: StatsTable, fold: np.ndarray, f: int, seed: int, n: int = 2000, per_class: int = 50) -> np.ndarray:
-    """Tile indices of fold f's fixed test sample: up to per_class tiles of every class, rarest first, then filled at random."""
+def pick_test_sample(t: StatsTable, fold: np.ndarray, f: int, seed: int, n: int = 2000, per_class: int = 50,
+                     pool: np.ndarray | None = None) -> np.ndarray:
+    """Tile indices of fold f's fixed test sample: up to per_class tiles of every class, rarest first, then filled at random.
+    pool replaces fold f's tiles (a validation draw under the same rules)."""
     rng = np.random.default_rng(seed)
     pres = tile_presence(t)
-    pool = np.flatnonzero(fold == f)
+    pool = np.flatnonzero(fold == f) if pool is None else pool
     chosen = []
     for c in np.argsort(pres[pool].sum(0)):
         have = pres[np.array(chosen, int), c].sum() if chosen else 0
