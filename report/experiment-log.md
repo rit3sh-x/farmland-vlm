@@ -251,3 +251,20 @@ The ranked readout, averaged over views of each tile: in each view every candida
 - **Why it fails.** The model's errors do not depend on orientation, so averaging views has nothing to cancel. This matches the robustness suite, where flipped and rotated tiles score within 0.4 points of clean ones. The errors are systematic: the wrong anomaly or a far cell, not orientation noise.
 - **Decision:** one view. The code is removed. Commit 49512cd holds it for reproduction.
 - **Refactor check:** the one-view rerun after the ranker began returning full candidate scores reproduced every earlier ranked and generated answer (6,072 of 6,072).
+
+## 2026-11-05 03:25: the learning curve bends; cycle 3 starts; validation now mirrors the test
+
+- **The 240k run ends at 63.7** (best check, at 200k), +1.1 over the 120k run's 62.6. Each doubling has paid less: +2.6, +1.8, +1.1. The 480k run (queued) tells whether one more doubling is worth twice the compute.
+- **all_linear at 120k pairs** sits level with rank 64 through its 60k check (59.6 against 60.0). So far it repeats rank 256's pattern.
+- **A fix to how choices are judged.**
+  - The held-out sample is drawn by fixed rules: at least 50 tiles of every class, rarest first, then random, plus 300 anomaly-free quadrant views per 2,000 tiles.
+  - The study's validation drew 1,000 tiles at random, so validation weighed rare classes less than the held-out score does.
+  - `validation_items(..., protocol="test")` now draws a fold's inner validation by the held-out rules. On fold 0 this lifts storm damage from 7 to 23 tiles and water from 14 to 29.
+  - The random protocol still reproduces the study's 6,072 items exactly, so every study comparison above stands.
+- **Cycle 3:**
+  - **Recipe:** the cycle-2 recipe at 240k pairs (rank 64, attn_qv, LR 2e-4, 384 px, RGB, dropout 0.05, LayerNorm frozen).
+  - **Checkpoints:** validated every 40k pairs with the ranked readout (`--select ranked`) on the test-protocol validation draw.
+  - **Captions:** keep cycle 2's adapters.
+  - **Folds:** 0–2 train in one slot and 3–4 in another.
+  - **Acceptance:** held-out scoring per fold, compared fold by fold with cycle 2 under the same ranked readout.
+- **Check of the length choice under the test protocol:** the 120k, 240k and rank-256 120k runs are being re-scored on fold 0's test-protocol validation draw.
