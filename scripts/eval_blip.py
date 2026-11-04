@@ -16,7 +16,7 @@ import numpy as np
 
 from farmvlm import folds as F, hub
 from farmvlm.evalset import eval_items
-from farmvlm.evaluate import predict, summarise, write
+from farmvlm.evaluate import VIEWS_D4, predict, predict_tta, summarise, write
 from farmvlm.images import SIZE, rgb_view
 from farmvlm.perturb import apply, remap, variants
 from farmvlm.scheme import VIEWS
@@ -69,6 +69,7 @@ def main():
     ap.add_argument("--suite", choices=["clean", "robustness", "leakage", "validation"], default="clean",
                     help="validation: the fold's inner-validation items (train_blip's split and draw), where readouts are chosen")
     ap.add_argument("--val-tiles", type=int, default=1000)
+    ap.add_argument("--tta", type=int, default=1, help="views per tile for the ranked readout (1, 4 or 8; see VIEWS_D4)")
     ap.add_argument("--batch", type=int, default=48)
     ap.add_argument("--beams", type=int, default=1, help="beam search width for generated answers and captions (1: greedy)")
     a = ap.parse_args()
@@ -93,7 +94,8 @@ def main():
             print(f"{name}: already scored", flush=True)
             return
         t0 = time.time()
-        rows = predict(reader, items, image, a.batch, heldout=heldout, ranked=ranked)
+        rows = (predict_tta(reader, items, image, VIEWS_D4[:a.tta], a.batch) if ranked and a.tta > 1
+                else predict(reader, items, image, a.batch, heldout=heldout, ranked=ranked))
         m = summarise(rows, ranked=ranked)
         write(rows, m, a.out / name, field_of)
         hub.push(a.out, a.out.name)

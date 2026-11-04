@@ -79,11 +79,20 @@ class BlipReader:
                                   encoder_attention_mask=torch.ones(img.shape[:-1], dtype=torch.long, device=self.device))[0]
         return q, x["attention_mask"]
 
-    @torch.no_grad()
     def rank(self, images, questions, candidates: list[list[str]]):
         """Each question's most likely candidate and probability, then the runner-up and its probability."""
-        q, qmask = self.question_states(images, questions)
         results = []
+        for cands, lp in zip(candidates, self.scores(images, questions, candidates)):
+            p = lp.exp()
+            j, j2 = (int(x) for x in p.topk(2).indices)
+            results.append((cands[j], float(p[j]), cands[j2], float(p[j2])))
+        return results
+
+    @torch.no_grad()
+    def scores(self, images, questions, candidates: list[list[str]]) -> list[torch.Tensor]:
+        """Each question's log-probabilities over its candidates: a softmax over their sequence log-likelihoods."""
+        q, qmask = self.question_states(images, questions)
+        out = []
         for i, cands in enumerate(candidates):
             a = self.proc.tokenizer(cands, return_tensors="pt", padding=True).to(self.device)
             ids = a["input_ids"].clone()
@@ -94,10 +103,8 @@ class BlipReader:
                                            encoder_attention_mask=qmask[i:i + 1].expand(k, -1), return_dict=True).logits
             lp = logits[:, :-1].float().log_softmax(-1).gather(-1, ids[:, 1:, None])[..., 0]
             seq = (lp * a["attention_mask"][:, 1:]).sum(1)
-            p = seq.softmax(0)
-            j, j2 = (int(x) for x in p.topk(2).indices)
-            results.append((cands[j], float(p[j]), cands[j2], float(p[j2])))
-        return results
+            out.append(seq.log_softmax(0))
+        return out
 
     @torch.no_grad()
     def caption(self, images, max_new_tokens=40):
