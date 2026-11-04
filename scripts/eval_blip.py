@@ -66,7 +66,9 @@ def main():
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--vqa-adapter", help="path, may contain {fold}")
     ap.add_argument("--caption-adapter", help="path, may contain {fold}")
-    ap.add_argument("--suite", choices=["clean", "robustness", "leakage"], default="clean")
+    ap.add_argument("--suite", choices=["clean", "robustness", "leakage", "validation"], default="clean",
+                    help="validation: the fold's inner-validation items (train_blip's split and draw), where readouts are chosen")
+    ap.add_argument("--val-tiles", type=int, default=1000)
     ap.add_argument("--batch", type=int, default=48)
     ap.add_argument("--beams", type=int, default=1, help="beam search width for generated answers and captions (1: greedy)")
     a = ap.parse_args()
@@ -110,6 +112,12 @@ def main():
     for f in a.folds:
         fmt = lambda p: p.format(fold=f) if p else None
         reader = load_reader(fmt(a.vqa_adapter), fmt(a.caption_adapter), a.beams, rec)
+        if a.suite == "validation":
+            from farmvlm.train_blip import split_tiles
+            _, pool = split_tiles(t, "folds", f, a.seed)
+            val = np.random.default_rng(a.seed).choice(pool, min(a.val_tiles, len(pool)), replace=False)
+            run(reader, eval_items(t, val, np.array([], int)), f"val-f{f}", ranked=True)
+            continue
         tiles = F.pick_test_sample(t, fold, f, a.seed)
         if a.suite == "clean":
             run(reader, eval_items(t, tiles, F.clean_views(t, np.flatnonzero(fold == f), a.seed)), f"f{f}", ranked=True)
