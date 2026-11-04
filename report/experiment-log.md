@@ -268,3 +268,17 @@ The ranked readout, averaged over views of each tile: in each view every candida
   - **Folds:** 0–2 train in one slot and 3–4 in another.
   - **Acceptance:** held-out scoring per fold, compared fold by fold with cycle 2 under the same ranked readout.
 - **Check of the length choice under the test protocol:** the 120k, 240k and rank-256 120k runs are being re-scored on fold 0's test-protocol validation draw.
+
+## 2026-11-05 03:35: the length choice holds under the held-out sampling rules
+
+The finalists on fold 0's test-protocol validation draw (6,542 items):
+
+| Run | Greedy | Ranked | Ranked change vs 120k (95% CI) |
+|---|---|---|---|
+| 120k pairs (cycle-2 recipe) | 62.6 | 64.7 | |
+| **240k pairs (cycle 3)** | 64.2 | **65.9** | **+1.2 [+0.2, +2.2]** |
+| rank 256, 120k pairs | 63.6 | 65.4 | +0.7 [−0.2, +1.7] |
+
+- **240k pairs stays ahead** on the draw that weighs rare classes as the held-out score does, so the cycle-3 choice stands.
+- **The ranked readout gains more here:** +2.0 at 120k, against +1.1 on the random draw. It helps rare classes most, where free generation more often produces an answer outside the set.
+- **Rank 256 at 120k** is again not distinguishable from rank 64.
