@@ -138,3 +138,31 @@ Cycle 2's caption fix (targets the model can end) is worth 18.5 points of fact F
 - **Training is deterministic.** Those two runs of one recipe and seed, built from different commits, agree on every one of the 5,098 validation items. Any difference between trials comes from the change or from the training seed.
 - **Rank:** VQA 58.2 at rank 64, 58.9 at 128 (+0.7 [+0.0, +1.4]) and 59.5 at 256 (+1.3 [+0.5, +2.1]). That is monotone, about +0.65 per doubling. Captions at rank 128 reach fact F1 74.0 (+1.9).
 - **Seed noise:** the reference retrained with training seed 1 scores 57.6 (−0.6 [−2.0, +0.8]). A second seed is running. Rank 256's gain is about twice this run-to-run spread.
+
+## 2026-11-05 00:20: seed noise changes how the study reads; BLIP-large captions are no better
+
+- **Seed noise.** The reference under three training seeds validates at 58.2, 57.6 and 56.5 (mean 57.4, sd 0.9).
+  - The field-grouped bootstrap covers item sampling only. Seed 2 against seed 0 gives −1.7 [−3.1, −0.4], which looks significant with nothing changed.
+  - From here, each single 30k run is read against the three-seed mean. The gap between one run and that mean has an sd of about 0.9 × √(4/3) ≈ 1.0 point.
+
+  | Trial (30k pairs) | Against seed mean | In sd |
+  |---|---|---|
+  | rank 256 | +2.1 | +2.1 |
+  | all_linear, LR 1e-4 | +1.6 | +1.6 |
+  | rank 128 | +1.5 | +1.5 |
+  | 512 px | +0.8 | +0.8 |
+  | dropout 0.1 | +0.6 | +0.6 |
+  | alpha 1× | −0.2 | −0.2 |
+  | NRG | −0.3 | −0.3 |
+
+- **Corrections to the entries above:**
+  - "Alpha 1× hurts" and the NRG VQA loss are within seed noise. There is no evidence either way.
+  - Rank 256 is the largest knob effect, but it rests on one run. A second seed is queued.
+- **Capacity points one way.** Rank 128, rank 256 and all_linear all land above the seed mean. Each alone is borderline; together they agree.
+- **Training length is far outside the noise:** +4.4 at 120k pairs against the reference, +5.2 against the seed mean.
+- **BLIP-large captioning:** fact F1 71.9 against 72.1, at about 4× the GPU minutes and 19 GB.
+  - Its curve starts lower (61.9 at 10k against 70.3), catches up by 20k, then stays flat.
+  - **Decision:** drop BLIP-large. Its ViT-L encoder adds nothing to captions here, so a large VQA model built from it is not worth building.
+- **all_linear at LR 1e-4:** level with rank 128 and below rank 256. It trains 40M parameters at about 3× the GPU minutes. **Decision:** the candidate recipe uses rank 256 on attn_qv, which costs about the same as the reference.
+- **Decision rule:** the final recipe is accepted only on the five held-out folds, compared fold by fold against cycle 2. Each fold is an independent training run, so that comparison carries seed noise honestly.
+- **Queued in round 2:** rank 256 under a second seed, and the 120k trial under a second seed (the noise that rank 256 at 120k is read against).
