@@ -36,7 +36,7 @@ def row(run: Path, ref: Path, task: str) -> dict:
     check = best_check(run)
     m = json.loads(check.with_suffix(".json").read_text())
     change = ", ".join(f"{k}={cfg.get(k)}" for k in KNOBS if cfg.get(k) != ref_cfg.get(k)) or "reference"
-    r = {"trial": run.name, "change": change + (f" (vs {ref.name})" if ref.name != "ref" else ""),
+    r = {"trial": run.name, "pairs": cfg["pairs"], "change": change + (f" (vs {ref.name})" if ref.name != "ref" else ""),
          "done": "done.json" in {p.name for p in run.iterdir()}, "trainable_m": cfg["trainable"] / 1e6,
          "gpu_min": gpu_minutes(run), "peak_gb": done.get("peak_gpu_gb"),
          "pairs_per_s": statistics.median([x["train/pairs_per_s"] for x in rows(run / "train.jsonl")] or [float("nan")])}
@@ -51,17 +51,29 @@ def row(run: Path, ref: Path, task: str) -> dict:
     return r
 
 
+def seed_spread(rows: list[dict]) -> tuple[float, float, int] | None:
+    """(mean, sd, n) of validation over the finished reference and its training-seed replicates (ref, ref-seed*). The
+    field bootstrap covers item sampling only; this is the run-to-run noise every single-run trial also carries."""
+    vals = [r["val"] for r in rows if r["done"] and (r["trial"] == "ref" or r["trial"].startswith("ref-seed"))]
+    return (statistics.mean(vals), statistics.stdev(vals), len(vals)) if len(vals) >= 3 else None
+
+
 def table(runs: Path, task: str) -> str:
     root, ref = runs / f"study-{task}", runs / f"study-{task}" / "ref"
     found = [d for d in sorted(root.iterdir()) if (d / "val").exists()] if root.exists() else []
-    lines = ["| trial | change | val | partial | change vs ref (95% CI) | trainable M | GPU min | peak GB | pairs/s |",
-             "|---|---|---|---|---|---|---|---|---|"]
-    for d in sorted(found, key=lambda d: (d.name != "ref", d.name)):
-        r = row(d, ref, task)
+    rs = [row(d, ref, task) for d in sorted(found, key=lambda d: (d.name != "ref", d.name))]
+    spread, ref_pairs = seed_spread(rs), json.loads((ref / "config.json").read_text())["pairs"]
+    lines = ["| trial | change | val | partial | change vs ref (95% CI) | vs seed mean (sd units) | trainable M | GPU min "
+             "| peak GB | pairs/s |", "|---|---|---|---|---|---|---|---|---|---|"]
+    for r in rs:
+        vs_seeds = "--"
+        if spread and r["pairs"] == ref_pairs:  # one run against the mean of n seeds: sd of the gap is sd * sqrt(1 + 1/n)
+            m, sd, n = spread
+            vs_seeds = f"{(r['val'] - m) * 100:+.1f} ({(r['val'] - m) / (sd * (1 + 1 / n) ** 0.5):+.1f})"
         delta, lo, hi = r["delta"]
         ci = f"{delta * 100:+.1f} [{lo * 100:+.1f}, {hi * 100:+.1f}]" if lo is not None else f"{delta * 100:+.1f}"
         part = f"{r['partial'] * 100:.1f}" if "partial" in r else "--"
-        lines.append(f"| {r['trial']}{'' if r['done'] else ' (running)'} | {r['change']} | {r['val'] * 100:.1f} | {part} | {ci} "
+        lines.append(f"| {r['trial']}{'' if r['done'] else ' (running)'} | {r['change']} | {r['val'] * 100:.1f} | {part} | {ci} | {vs_seeds} "
                      f"| {r['trainable_m']:.1f} | {r['gpu_min']:.0f} | {r['peak_gb'] or '--'} | {r['pairs_per_s']:.0f} |")
     return "\n".join(lines)
 

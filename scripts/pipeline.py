@@ -45,8 +45,11 @@ STUDY = [("ref", {}, BOTH), ("size512", {"size": 512}, BOTH), ("rank128", {"rank
          ("pairs240k", {"pairs": 240_000}, VQA), ("pairs480k", {"pairs": 480_000}, VQA)]
 # Round 2, from the first results: two training-seed replicates of the reference measure run-to-run noise, which the
 # field bootstrap does not cover; rank 256 (+1.3 at 30k) at the cycle-2 length checks the gain survives longer training.
+# Then, since the three reference seeds spread 56.5 to 58.2: rank 256 under a second seed, and the 120k trial under a
+# second seed (the noise its rank-256 counterpart is read against).
 STUDY2 = [("ref-seed1", {"train_seed": 1}, VQA), ("ref-seed2", {"train_seed": 2}, VQA),
-          ("rank256-pairs120k", {"rank": 256, "pairs": 120_000}, VQA)]
+          ("rank256-pairs120k", {"rank": 256, "pairs": 120_000}, VQA), ("rank256-seed1", {"rank": 256, "train_seed": 1}, VQA),
+          ("pairs120k-seed1", {"pairs": 120_000, "train_seed": 1}, VQA)]
 STUDY_PAIRS, STUDY_VAL_TILES = 30_000, 1000
 SERVED_PAIRS = 30_000  # per cycle: Qwen3.5-2B trains at ~146 min per 10k pairs on a T4
 # Cycle 2 restarts the cosine schedule from cycle 1's best adapter (its validation was still rising at 30k pairs).
