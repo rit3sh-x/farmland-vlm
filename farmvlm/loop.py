@@ -61,8 +61,9 @@ def lora_stats(model) -> dict:
 
 
 class Profile:
-    """A torch.profiler window over profile_steps optimizer steps: a Chrome trace, CUDA and CPU stacks for a
-    flamegraph, and the top operators, written to out/profile/."""
+    """A torch.profiler window over profile_steps optimizer steps: a Chrome trace, CUDA stacks for a flamegraph (py-spy
+    covers the CPU side; torch's CPU stacks ran to 0.5 GB and took longer to write than the run), and the top operators,
+    written to out/profile/. The .gz and .stacks names keep them out of Hub pushes."""
 
     def __init__(self, cfg):
         self.out, self.start, self.stop, self.prof = cfg.out / "profile", 20, 20 + cfg.profile_steps, None
@@ -79,8 +80,7 @@ class Profile:
             self.prof.stop()
             self.out.mkdir(parents=True, exist_ok=True)
             self.prof.export_chrome_trace(str(self.out / "trace.json.gz"))  # ~0.4 GB raw; .gz also keeps it off the Hub
-            self.prof.export_stacks(str(self.out / "stacks_cuda.txt"), "self_cuda_time_total")
-            self.prof.export_stacks(str(self.out / "stacks_cpu.txt"), "self_cpu_time_total")
+            self.prof.export_stacks(str(self.out / "cuda.stacks"), "self_cuda_time_total")
             (self.out / "top_ops.txt").write_text(self.prof.key_averages().table(sort_by="cuda_time_total", row_limit=40))
             print(f"profile written to {self.out}", flush=True)
             self.prof = None
