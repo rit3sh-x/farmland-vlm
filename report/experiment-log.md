@@ -166,3 +166,27 @@ Cycle 2's caption fix (targets the model can end) is worth 18.5 points of fact F
 - **all_linear at LR 1e-4:** level with rank 128 and below rank 256. It trains 40M parameters at about 3× the GPU minutes. **Decision:** the candidate recipe uses rank 256 on attn_qv, which costs about the same as the reference.
 - **Decision rule:** the final recipe is accepted only on the five held-out folds, compared fold by fold against cycle 2. Each fold is an independent training run, so that comparison carries seed noise honestly.
 - **Queued in round 2:** rank 256 under a second seed, and the 120k trial under a second seed (the noise that rank 256 at 120k is read against).
+
+## 2026-11-05 00:55: every capacity knob gains at 30k; does any raise the ceiling?
+
+| Trial (VQA, 30k pairs) | Validation | Against seed mean (sd units) |
+|---|---|---|
+| all_linear, LR 2e-4 | 59.9 | **+2.5** |
+| rank 256 | 59.5 | +2.1 |
+| all_linear, LR 1e-4 | 59.0 | +1.6 |
+| alpha 4× (256) | 59.0 | +1.6 |
+| rank 128 | 58.9 | +1.5 |
+| trainable LayerNorm | 57.8 | +0.4 |
+
+- **Every knob that enlarges the update gains 1.5 to 2.5 sd,** whether through more rank, more modules or a larger scale. Trainable LayerNorm does not help. **Decision:** keep LayerNorm frozen.
+- **Captions** gain too: all_linear at LR 1e-4 reaches fact F1 75.0 (+2.9) and rank 128 reaches 74.0 (+1.9). Caption seed noise is unmeasured.
+- **The 30k gains may be convergence speed, not ceiling.** The 30k runs end their cosine schedule while the reference is still climbing (the 120k curve gains 4.4 more), so a bigger update could just reach the same plateau sooner. Rank 256 at 120k pairs, partway:
+
+  | Pairs | Rank 64 | Rank 256 |
+  |---|---|---|
+  | 20k | 54.4 | 54.7 |
+  | 40k | 57.7 | 45.7 |
+  | 60k | 60.0 | 59.9 |
+
+  The rank-256 dip at 40k sits near peak LR. It recovers, so the larger update is less stable at full LR. Level at 60k means no ceiling gain so far.
+- **Queued:** all_linear at LR 2e-4 at 120k pairs. With rank 256 at 120k and a second seed of the 120k trial, it decides whether any knob beats training length alone.
