@@ -134,7 +134,7 @@ def main():
     ap.add_argument("--dropout", type=float, default=0.05, help="LoRA dropout")
     ap.add_argument("--train-norms", action="store_true", help="also train every LayerNorm (saved with the adapter)")
     ap.add_argument("--size", type=int, default=SIZE, help="input px; BLIP was pretrained at 384, tiles are 512")
-    ap.add_argument("--base", choices=list(BASES), default="base", help="BLIP base (224M) or large (~470M)")
+    ap.add_argument("--base", choices=list(BASES), default="base", help="BLIP base, or large (ViT-L; captioning only)")
     ap.add_argument("--bands", choices=["rgb", "nrg"], default="rgb", help="nrg: near-infrared, red, green false colour")
     ap.add_argument("--log-every", type=int, default=50, help="optimizer steps between train.jsonl records")
     ap.add_argument("--profile", type=int, default=0, help="profile this many steps into out/profile/ (0: off)")
@@ -147,6 +147,8 @@ def main():
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--resume", type=Path)
     a = ap.parse_args()
+    if BASES[a.base][a.task == "caption"] is None:
+        ap.error(f"no BLIP-{a.base} checkpoint for {a.task}")
     a.alpha = a.alpha or 2 * a.rank
     a.train_seed = a.seed if a.train_seed is None else a.train_seed
     a.out.mkdir(parents=True, exist_ok=True)

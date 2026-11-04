@@ -9,8 +9,10 @@ from transformers import BlipForConditionalGeneration, BlipForQuestionAnswering,
 
 from farmvlm.images import SIZE
 
+# (VQA, captioning). There is no large VQA checkpoint: Salesforce/blip-vqa-capfilt-large's pytorch_model.bin is
+# byte-identical to blip-vqa-base's (sha256 d47763c493a0..., ViT-B config), so a "large" VQA run was the base model.
 BASES = {"base": ("Salesforce/blip-vqa-base", "Salesforce/blip-image-captioning-base"),
-         "large": ("Salesforce/blip-vqa-capfilt-large", "Salesforce/blip-image-captioning-large")}  # (VQA, captioning)
+         "large": (None, "Salesforce/blip-image-captioning-large")}
 VQA_ID, CAPTION_ID = BASES["base"]
 
 
