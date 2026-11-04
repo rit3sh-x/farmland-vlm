@@ -108,3 +108,23 @@ Cycle 2's caption fix (targets the model can end) is worth 18.5 points of fact F
 
 - **Rank 256 is the first significant gain.**
 - **A smaller update scale (alpha = rank) hurts.** Both results point towards more adaptation capacity, which makes the pending alpha = 4× and rank 128 trials informative.
+
+## 2026-11-04 23:35: length is the largest lever; 512 px is not
+
+| Trial (fold-0 validation) | VQA | Change (95% CI) | Caption fact F1 | GPU cost |
+|---|---|---|---|---|
+| reference, 30k pairs | 58.2 | | 72.1 | 1× |
+| 120k pairs (the cycle-2 recipe) | **62.6** | **+4.4 [+2.7, +6.3]** vs reference | | 4× |
+| 512 px input | 58.2 | −0.0 [−0.9, +0.8] | 70.2 (−1.9) | 3×, 19.5 GB |
+| rank 128 (partway) | 58.1 | −0.1 [−1.2, +0.9] | | |
+
+- **The 120k learning curve** (VQA validation every 20k pairs): 54.4, 57.7, 60.0, 61.7, 61.7, 62.6.
+  - The last 20k pairs still add +0.9 [+0.4, +1.6].
+  - The cosine schedule ends at zero LR, so part of that final step is annealing rather than new data.
+  - Training length is worth over three times rank 256's gain. The 240k and 480k trials measure how far it goes.
+- **512 px:** no VQA gain, a caption loss and three times the GPU time. **Decision:** keep 384 px, BLIP's pretraining size.
+- **NRG** also costs captions 2.9 points of fact F1, confirming RGB.
+- **Seed noise is unmeasured.** Rank 128 sits level with the reference while rank 256 gains 1.3. The field bootstrap covers which items were sampled, not which training run. **Round 2 (running in a fourth slot):**
+  - two training-seed replicates of the reference on the same validation items (`--train-seed` seeds LoRA init and the training draws, while `--seed` still fixes folds and items)
+  - rank 256 at 120k pairs, compared with the 120k trial, to test whether its gain survives longer training
+- Validation (62.6) and the held-out fold-0 score of the same recipe (67.6) use different items. Only paired comparisons on the same items are compared.
