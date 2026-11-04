@@ -190,3 +190,18 @@ Cycle 2's caption fix (targets the model can end) is worth 18.5 points of fact F
 
   The rank-256 dip at 40k sits near peak LR. It recovers, so the larger update is less stable at full LR. Level at 60k means no ceiling gain so far.
 - **Queued:** all_linear at LR 2e-4 at 120k pairs. With rank 256 at 120k and a second seed of the 120k trial, it decides whether any knob beats training length alone.
+
+## 2026-11-05 01:55: rank raises speed, not the ceiling; dropout is inert
+
+- **Rank 256 at 120k pairs:** 63.2 against rank 64's 62.6, +0.6 [−0.7, +1.9]. That interval covers item sampling only, before seed noise.
+
+  | Pairs | 20k | 40k | 60k | 80k | 100k | 120k |
+  |---|---|---|---|---|---|---|
+  | rank 64 | 54.4 | 57.7 | 60.0 | 61.7 | 61.7 | 62.6 |
+  | rank 256 | 54.7 | 45.7 | 59.9 | 61.8 | 61.7 | 63.2 |
+
+  From 60k on the two curves match. Rank 256's 30k gain was faster convergence, not a higher ceiling. **Decision:** keep rank 64 unless all_linear at 120k (queued) shows a gain beyond the seed spread.
+- **Dropout:** 0, 0.05, 0.1 and 0.2 validate at 58.3, 58.2, 58.0 and 58.2. That is flat, inside 0.3 points. **Decision:** keep 0.05. Regularisation is not what limits a 30k-pair adapter on this data.
+- **Readouts chosen on validation, not test.**
+  - The earlier `study-decode-beams3` run scored beam search on held-out fold 0. That compares on test items, so it is reported only and chooses nothing.
+  - `eval_blip.py --suite validation` now scores the cycle-2 fold-0 adapters on fold 0's 1,000 inner-validation tiles: greedy, ranked over each question's answer set, and beam width 3. The readout for cycle 3 is picked there.
