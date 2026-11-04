@@ -205,3 +205,21 @@ Cycle 2's caption fix (targets the model can end) is worth 18.5 points of fact F
 - **Readouts chosen on validation, not test.**
   - The earlier `study-decode-beams3` run scored beam search on held-out fold 0. That compares on test items, so it is reported only and chooses nothing.
   - `eval_blip.py --suite validation` now scores the cycle-2 fold-0 adapters on fold 0's 1,000 inner-validation tiles: greedy, ranked over each question's answer set, and beam width 3. The readout for cycle 3 is picked there.
+
+## 2026-11-05 02:05: the ranked readout, chosen on validation
+
+The cycle-2 fold-0 adapters on fold 0's 1,000 inner-validation tiles (6,072 items). One model throughout, so seed noise does not apply.
+
+| Readout | Four-question mean | Change vs greedy (95% CI) | Identify | Extent | Location | Caption fact F1 |
+|---|---|---|---|---|---|---|
+| greedy generation | 62.3 | | 43.0 | 55.4 | 60.4 | 78.3 |
+| **ranked over the question's answer set** | **63.4** | **+1.1 [+0.4, +1.8]** | 46.4 | 55.0 | 61.7 | (captions generated) |
+| beam search, width 3 | 62.1 | −0.2 [−0.9, +0.5] | 44.7 | 53.0 | 60.5 | 78.0 |
+
+- **Decision:**
+  - VQA answers are read out by ranking each question's candidate answers by likelihood. Greedy generation is no longer used for VQA.
+  - Captions stay greedy.
+  - Beam search is dropped.
+- **How it works.** Ranking can only return a well-formed answer, so it removes generated strings outside the answer set. Ranked fixes 115 items and breaks 73.
+- **Cycle 2 under the chosen readout:** the held-out ranked scores were computed alongside greedy all along, so cycle 2 with this validation-chosen readout scores **68.1 ± 1.2** over five folds (greedy: 66.8). The held-out folds were not consulted for this choice.
+- **The held-out beam result** (`study-decode-beams3`, 68.3 greedy-beam against 67.6 greedy on fold 0) is reported only, since it was scored on test items.
