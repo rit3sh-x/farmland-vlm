@@ -223,3 +223,17 @@ The cycle-2 fold-0 adapters on fold 0's 1,000 inner-validation tiles (6,072 item
 - **How it works.** Ranking can only return a well-formed answer, so it removes generated strings outside the answer set. Ranked fixes 115 items and breaks 73.
 - **Cycle 2 under the chosen readout:** the held-out ranked scores were computed alongside greedy all along, so cycle 2 with this validation-chosen readout scores **68.1 ± 1.2** over five folds (greedy: 66.8). The held-out folds were not consulted for this choice.
 - **The held-out beam result** (`study-decode-beams3`, 68.3 greedy-beam against 67.6 greedy on fold 0) is reported only, since it was scored on test items.
+
+## 2026-11-05 02:25: rank 256 replicates at 30k; the learning curve keeps rising
+
+- **Rank 256 under a second training seed:** 59.5 again, +2.0 sd over the reference seed mean. Its 30k gain is real, but it is a gain in speed. At 120k pairs it ties rank 64 (previous entry).
+- **The learning curve,** best validation of each run (VQA four-question mean):
+
+  | Pairs in the schedule | 30k | 60k | 120k | 240k (at 120k, running) |
+  |---|---|---|---|---|
+  | Validation | 58.2 | 60.8 | 62.6 | 62.9 |
+
+  - Each doubling still adds about 2 points.
+  - The 240k run already passes the finished 120k run at its own 120k mark, while its LR is still at half.
+  - The 480k run (queued) shows where it bends.
+- **Qwen3.5-2B, cycle 2** (75 validation tiles): NDVI input 69.7 against RGB 67.3. NDVI evaluation, export and robustness follow.
