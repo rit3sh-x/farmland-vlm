@@ -9,8 +9,9 @@ from transformers import BlipForConditionalGeneration, BlipForQuestionAnswering,
 
 from farmvlm.images import SIZE
 
-VQA_ID = "Salesforce/blip-vqa-base"
-CAPTION_ID = "Salesforce/blip-image-captioning-base"
+BASES = {"base": ("Salesforce/blip-vqa-base", "Salesforce/blip-image-captioning-base"),
+         "large": ("Salesforce/blip-vqa-capfilt-large", "Salesforce/blip-image-captioning-large")}  # (VQA, captioning)
+VQA_ID, CAPTION_ID = BASES["base"]
 
 
 def _geo_mean_prob(scores, sequences, start: int) -> list[float]:
@@ -36,15 +37,16 @@ def processor(model_id: str, size: int = SIZE) -> BlipProcessor:
 class BlipReader:
     """Pass models to wrap them (e.g. a PEFT model during validation); missing ones load from the Hub unless load=False."""
 
-    def __init__(self, vqa=None, captioner=None, device="cuda", dtype=torch.float16, load=True, size=SIZE, beams=1):
+    def __init__(self, vqa=None, captioner=None, device="cuda", dtype=torch.float16, load=True, size=SIZE, beams=1, base="base"):
         self.device, self.dtype, self.beams = device, dtype, beams
-        self.proc = processor(VQA_ID, size)
-        self.cap_proc = processor(CAPTION_ID, size)
+        vqa_id, cap_id = BASES[base]
+        self.proc = processor(vqa_id, size)
+        self.cap_proc = processor(cap_id, size)
         self.hi_res = size != SIZE  # BLIP's position embeddings are for 384 px; other sizes interpolate them
         if vqa is None and load:
-            vqa = BlipForQuestionAnswering.from_pretrained(VQA_ID, dtype=dtype).to(device).eval()
+            vqa = BlipForQuestionAnswering.from_pretrained(vqa_id, dtype=dtype).to(device).eval()
         if captioner is None and load:
-            captioner = BlipForConditionalGeneration.from_pretrained(CAPTION_ID, dtype=dtype).to(device).eval()
+            captioner = BlipForConditionalGeneration.from_pretrained(cap_id, dtype=dtype).to(device).eval()
         self.vqa, self.cap = vqa, captioner
         self.bos = (vqa or captioner).config.text_config.bos_token_id
 

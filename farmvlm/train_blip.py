@@ -4,7 +4,10 @@
         --fold 0 --seed 0 --rank 16 --lr 1e-4 --targets attn_qv --pairs 120000 --out /content/runs/vqa-f0
 """
 import argparse
+import hashlib
 import json
+import platform
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -15,9 +18,9 @@ from torch.utils.data import DataLoader, IterableDataset, get_worker_info
 
 from farmvlm import folds as F
 from farmvlm import hub, loop, track
-from farmvlm.blip import CAPTION_ID, VQA_ID, BlipReader, processor
+from farmvlm.blip import BASES, BlipReader, processor
 from farmvlm.evalset import eval_items
-from farmvlm.evaluate import predict, summarise
+from farmvlm.evaluate import predict, summarise, write
 from farmvlm.images import SIZE, rgb_view
 from farmvlm.items import caption_refs, render_question
 from farmvlm.sampler import Sampler
@@ -35,9 +38,9 @@ NORMS = ["layer_norm1", "layer_norm2", "post_layernorm", "LayerNorm"]  # every L
 class Draws(IterableDataset):
     """An endless stream of (image, question, answer) from the balanced sampler; each worker draws with its own seed."""
 
-    def __init__(self, t, root, tiles, mix, seed, location_cell_share=None, size=SIZE):
+    def __init__(self, t, root, tiles, mix, seed, location_cell_share=None, size=SIZE, bands="rgb"):
         self.t, self.root, self.tiles, self.mix, self.seed = t, root, tiles, mix, seed
-        self.location_cell_share, self.size = location_cell_share, size
+        self.location_cell_share, self.size, self.bands = location_cell_share, size, bands
 
     def __iter__(self):
         wid = get_worker_info().id if get_worker_info() else 0
@@ -46,7 +49,7 @@ class Draws(IterableDataset):
         while True:
             item = s.draw()
             ti = self.t.row_tile[item.row]
-            img = rgb_view(self.root, self.t.split[ti], self.t.tile[ti], VIEWS[self.t.row_view[item.row]], self.size)
+            img = rgb_view(self.root, self.t.split[ti], self.t.tile[ti], VIEWS[self.t.row_view[item.row]], self.size, self.bands)
             if item.family == "caption":
                 refs = caption_refs(item)
                 yield img, "", refs[rng.integers(len(refs))]
@@ -62,13 +65,18 @@ def split_tiles(t, how, fold_index, seed):
         return np.setdiff1d(train, train[val]), train[val]
     fold = F.make_folds(t, seed)
     inner = F.inner_validation(t, fold, fold_index, seed)
-    return np.flatnonzero((fold != fold_index) & ~inner), np.flatnonzero(inner)
+    train, val, test = (np.flatnonzero((fold != fold_index) & ~inner), np.flatnonzero(inner), np.flatnonzero(fold == fold_index))
+    for x, y, what in ((train, val, "validation"), (train, test, "the held-out test fold"), (val, test, "the held-out test fold")):
+        shared = set(t.field[x]) & set(t.field[y])
+        assert not shared, f"leakage: {len(shared)} fields in both a training-side split and {what}"
+    return train, val
 
 
-def build_model(task, rank, alpha, targets, dora, resume=None, dropout=0.05, train_norms=False):
+def build_model(task, rank, alpha, targets, dora, resume=None, dropout=0.05, train_norms=False, base_model="base"):
     from transformers import BlipForConditionalGeneration, BlipForQuestionAnswering
-    base = (BlipForQuestionAnswering.from_pretrained(VQA_ID) if task == "vqa"
-            else BlipForConditionalGeneration.from_pretrained(CAPTION_ID)).to("cuda").half()
+    vqa_id, cap_id = BASES[base_model]
+    base = (BlipForQuestionAnswering.from_pretrained(vqa_id) if task == "vqa"
+            else BlipForConditionalGeneration.from_pretrained(cap_id)).to("cuda").half()
     if resume:
         model = PeftModel.from_pretrained(base, resume, is_trainable=True)
     else:
@@ -124,6 +132,10 @@ def main():
     ap.add_argument("--dropout", type=float, default=0.05, help="LoRA dropout")
     ap.add_argument("--train-norms", action="store_true", help="also train every LayerNorm (saved with the adapter)")
     ap.add_argument("--size", type=int, default=SIZE, help="input px; BLIP was pretrained at 384, tiles are 512")
+    ap.add_argument("--base", choices=list(BASES), default="base", help="BLIP base (224M) or large (~470M)")
+    ap.add_argument("--bands", choices=["rgb", "nrg"], default="rgb", help="nrg: near-infrared, red, green false colour")
+    ap.add_argument("--log-every", type=int, default=50, help="optimizer steps between train.jsonl records")
+    ap.add_argument("--profile", type=int, default=0, help="profile this many steps into out/profile/ (0: off)")
     ap.add_argument("--pairs", type=int, default=120_000)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--eval-every", type=int, default=5000)
@@ -140,33 +152,52 @@ def main():
     train_tiles, val_pool = split_tiles(t, a.split, a.fold, a.seed)
     val_tiles = np.random.default_rng(a.seed).choice(val_pool, min(a.val_tiles, len(val_pool)), replace=False)
     val_items = [i for i in eval_items(t, val_tiles, np.array([], int)) if (i.family == "caption") == (a.task == "caption")]
-    proc = processor(VQA_ID if a.task == "vqa" else CAPTION_ID, a.size)
-    model = build_model(a.task, a.rank, a.alpha, a.targets, a.dora, a.resume, a.dropout, a.train_norms)
+    proc = processor(BASES[a.base][a.task == "caption"], a.size)
+    model = build_model(a.task, a.rank, a.alpha, a.targets, a.dora, a.resume, a.dropout, a.train_norms, a.base)
     reader = BlipReader(vqa=model if a.task == "vqa" else None, captioner=model if a.task == "caption" else None, load=False,
-                        size=a.size)
-    image = lambda r: rgb_view(a.root, t.split[t.row_tile[r]], t.tile[t.row_tile[r]], VIEWS[t.row_view[r]], a.size)
+                        size=a.size, base=a.base)
+    image = lambda r: rgb_view(a.root, t.split[t.row_tile[r]], t.tile[t.row_tile[r]], VIEWS[t.row_view[r]], a.size, a.bands)
     key = "vqa_generated" if a.task == "vqa" else "caption_facts"
+    checks = len(list((a.out / "val").glob("*.json"))) if (a.out / "val").exists() else 0
 
     def validate():
-        """Mean accuracy over question families (as the served VLM's loop), so no family's item count dominates."""
-        m = summarise(predict(reader, val_items, image))[key]
+        """Mean accuracy over question families (as the served VLM's loop), so no family's item count dominates.
+        Every check keeps its per-item predictions (val/NN.jsonl): trials share the validation items, so any two
+        checkpoints or runs compare item by item."""
+        nonlocal checks
+        rows = predict(reader, val_items, image)
+        full = summarise(rows)
+        (a.out / "val").mkdir(exist_ok=True)
+        write(rows, full, a.out / "val" / f"{checks:02d}", lambda r: str(t.field[t.row_tile[r]]))
+        checks += 1
+        m = full[key]
         with open(a.out / "val.jsonl", "a") as f:
             f.write(json.dumps(m) + "\n")
         return float(np.mean(list(m["by_family"].values()))) if a.task == "vqa" else m["f1"]
 
+    git = lambda *c: subprocess.run(["git", "-C", str(Path(__file__).parent), *c], capture_output=True, text=True).stdout.strip()
+    import peft
+    import transformers
     cfg = {k: str(v) if isinstance(v, Path) else v for k, v in vars(a).items()}
     cfg.update(train_tiles=int(len(train_tiles)), val_items=len(val_items),
-               trainable=sum(p.numel() for p in model.parameters() if p.requires_grad))
+               trainable=sum(p.numel() for p in model.parameters() if p.requires_grad),
+               commit=git("rev-parse", "--short", "HEAD"), dirty=bool(git("status", "--porcelain", "--untracked-files=no")),
+               stats_sha256=hashlib.sha256(a.stats.read_bytes()).hexdigest()[:16], gpu=torch.cuda.get_device_name(),
+               host=platform.node(), versions={"torch": torch.__version__, "transformers": transformers.__version__,
+                                               "peft": peft.__version__})
     (a.out / "config.json").write_text(json.dumps(cfg, indent=1))
     mix = "blip_vqa" if a.task == "vqa" else "blip_caption"
-    dl = DataLoader(Draws(t, a.root, train_tiles, mix, a.seed + (7919 if a.resume else 0), a.location_cell_share, a.size),
+    dl = DataLoader(Draws(t, a.root, train_tiles, mix, a.seed + (7919 if a.resume else 0), a.location_cell_share, a.size,
+                          a.bands),
                     batch_size=a.batch, num_workers=2,
                     collate_fn=collate(proc, a.task, model.config.text_config.bos_token_id), prefetch_factor=4)
+    name = hub.name_of(a.out)
+    tracker = track.start(name, cfg, group=name.split("/")[0])
     loop.run(model, dl, loss_of(model, a.task, a.size != SIZE), validate,
              loop.LoopConfig(out=a.out, pairs=a.pairs, batch=a.batch, lr=a.lr, eval_every=a.eval_every,
-                             patience=a.patience, resume=a.resume,
-                             on_checkpoint=lambda: hub.push(a.out, hub.name_of(a.out)),
-                             on_log=track.start(hub.name_of(a.out), cfg)))
+                             patience=a.patience, resume=a.resume, log_every=a.log_every, profile_steps=a.profile,
+                             on_checkpoint=lambda: hub.push(a.out, name),
+                             on_log=tracker.log if tracker else None, on_alert=tracker.alert if tracker else None))
 
 
 if __name__ == "__main__":

@@ -21,8 +21,12 @@ def _crop(a: np.ndarray, view: str) -> np.ndarray:
     return a[rs, cs]
 
 
-def rgb_view(root: Path, split: str, stem: str, view: str = "full", size: int = SIZE) -> Image.Image:
+def rgb_view(root: Path, split: str, stem: str, view: str = "full", size: int = SIZE, bands: str = "rgb") -> Image.Image:
+    """bands "nrg": the false-colour (near-infrared, red, green) composite, putting plant vigour into BLIP's three channels."""
     a = np.asarray(Image.open(root / split / "images" / "rgb" / f"{stem}.jpg").convert("RGB"))
+    if bands == "nrg":
+        nir = np.asarray(Image.open(root / split / "images" / "nir" / f"{stem}.jpg").convert("L"))
+        a = np.dstack([nir, a[..., 0], a[..., 1]])
     return Image.fromarray(_crop(a, view)).resize((size, size), Image.BICUBIC)
 
 

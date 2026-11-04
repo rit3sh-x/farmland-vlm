@@ -17,7 +17,7 @@ import numpy as np
 from farmvlm import folds as F, hub
 from farmvlm.evalset import eval_items
 from farmvlm.evaluate import predict, summarise, write
-from farmvlm.images import rgb_view
+from farmvlm.images import SIZE, rgb_view
 from farmvlm.perturb import apply, remap, variants
 from farmvlm.scheme import VIEWS
 from farmvlm.stats import StatsTable
@@ -25,18 +25,36 @@ from farmvlm.stats import StatsTable
 ROBUST_TILES = 500
 
 
-def load_reader(vqa_adapter, cap_adapter, beams=1):
+def recipe(vqa_adapter, cap_adapter) -> dict:
+    """How the adapters were trained, from their runs' config.json: each task's base model, and the input size and bands
+    both tasks' images share. Runs from before these options read as BLIP base, 384 px, RGB."""
+    r, inputs = {"vqa_base": "base", "cap_base": "base", "size": SIZE, "bands": "rgb"}, set()
+    for key, adapter in (("vqa_base", vqa_adapter), ("cap_base", cap_adapter)):
+        cfg = Path(adapter).parent / "config.json" if adapter else None
+        if cfg and cfg.exists():
+            c = json.loads(cfg.read_text())
+            r[key] = c.get("base", "base")
+            inputs.add((c.get("size", SIZE), c.get("bands", "rgb")))
+    assert len(inputs) <= 1, f"the two adapters were trained on different inputs: {inputs}"
+    if inputs:
+        r["size"], r["bands"] = inputs.pop()
+    return r
+
+
+def load_reader(vqa_adapter, cap_adapter, beams=1, r=None):
     import torch
     from peft import PeftModel
     from transformers import BlipForConditionalGeneration, BlipForQuestionAnswering
-    from farmvlm.blip import CAPTION_ID, VQA_ID, BlipReader
-    vqa = BlipForQuestionAnswering.from_pretrained(VQA_ID, dtype=torch.float16)
-    cap = BlipForConditionalGeneration.from_pretrained(CAPTION_ID, dtype=torch.float16)
+    from farmvlm.blip import BASES, BlipReader
+    r = r or recipe(vqa_adapter, cap_adapter)
+    vqa = BlipForQuestionAnswering.from_pretrained(BASES[r["vqa_base"]][0], dtype=torch.float16)
+    cap = BlipForConditionalGeneration.from_pretrained(BASES[r["cap_base"]][1], dtype=torch.float16)
     if vqa_adapter:
         vqa = PeftModel.from_pretrained(vqa, vqa_adapter).merge_and_unload()
     if cap_adapter:
         cap = PeftModel.from_pretrained(cap, cap_adapter).merge_and_unload()
-    return BlipReader(vqa=vqa.half().cuda().eval(), captioner=cap.half().cuda().eval(), beams=beams)
+    return BlipReader(vqa=vqa.half().cuda().eval(), captioner=cap.half().cuda().eval(), beams=beams, size=r["size"],
+                      base=r["vqa_base"])
 
 
 def main():
@@ -55,7 +73,9 @@ def main():
     a.out.mkdir(parents=True, exist_ok=True)
     sha = subprocess.run(["git", "-C", str(Path(__file__).parent), "rev-parse", "--short", "HEAD"],
                          capture_output=True, text=True).stdout.strip()
-    (a.out / "config.json").write_text(json.dumps({**{k: str(v) for k, v in vars(a).items()}, "commit": sha}))
+    first = lambda p: p.format(fold=a.folds[0]) if p else None
+    rec = recipe(first(a.vqa_adapter), first(a.caption_adapter))
+    (a.out / "config.json").write_text(json.dumps({**{k: str(v) for k, v in vars(a).items()}, "commit": sha, "recipe": rec}))
     t = StatsTable.load(a.stats)
     fold = F.make_folds(t, a.seed)
     field_of = lambda r: str(t.field[t.row_tile[r]])
@@ -63,7 +83,7 @@ def main():
     @lru_cache(maxsize=8192)
     def base(row):
         ti = t.row_tile[row]
-        return rgb_view(a.root, t.split[ti], t.tile[ti], VIEWS[t.row_view[row]])
+        return rgb_view(a.root, t.split[ti], t.tile[ti], VIEWS[t.row_view[row]], rec["size"], rec["bands"])
 
     def run(reader, items, name, image=base, heldout=False, ranked=False):
         # Each result is pushed as it lands and skipped on a rerun, so a recycled Colab VM loses one result, not the suite.
@@ -78,7 +98,7 @@ def main():
         print(f"{name}: {len(items)} items {time.time() - t0:.0f}s acc {m['vqa_generated']['accuracy']:.3f}", flush=True)
 
     if a.suite == "leakage":
-        reader = load_reader(a.vqa_adapter, a.caption_adapter, a.beams)
+        reader = load_reader(a.vqa_adapter, a.caption_adapter, a.beams, rec)
         train_fields = set(t.field[t.split == "train"])
         val = np.flatnonzero(t.split == "val")
         seen = np.array([t.field[i] in train_fields for i in val])
@@ -89,7 +109,7 @@ def main():
         return
     for f in a.folds:
         fmt = lambda p: p.format(fold=f) if p else None
-        reader = load_reader(fmt(a.vqa_adapter), fmt(a.caption_adapter), a.beams)
+        reader = load_reader(fmt(a.vqa_adapter), fmt(a.caption_adapter), a.beams, rec)
         tiles = F.pick_test_sample(t, fold, f, a.seed)
         if a.suite == "clean":
             run(reader, eval_items(t, tiles, F.clean_views(t, np.flatnonzero(fold == f), a.seed)), f"f{f}", ranked=True)
