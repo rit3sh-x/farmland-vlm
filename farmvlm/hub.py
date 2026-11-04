@@ -34,27 +34,33 @@ def _api():
     return api
 
 
+def _retried(what: str, fn, tries: int = 6):
+    """fn(), retried with backoff: several VMs (and Kaggle's two GPUs) commit to the one repo at once, and downloads
+    to svm-ws stall now and then (a stalled pull raised ReadTimeout and ended a pipeline; each retry resumes the file)."""
+    for attempt in range(tries):
+        try:
+            return fn()
+        except Exception as e:
+            if attempt == tries - 1:
+                raise
+            print(f"hub {what} failed ({type(e).__name__}); retrying", flush=True)
+            time.sleep(20 * (attempt + 1))
+
+
 def push(local: Path, name: str, include=("*.json", "*.jsonl", "*.safetensors", "*.pt", "*.gguf", "*.npz", "*.txt", "*.model")):
-    """Upload a run folder; retried, since several VMs (and Kaggle's two GPUs) commit to the one repo at once."""
+    """Upload a run folder."""
     if not enabled() or not Path(local).exists():
         return
-    for attempt in range(4):
-        try:
-            _api().upload_folder(folder_path=str(local), path_in_repo=f"runs/{name}", repo_id=REPO,
-                                 allow_patterns=[f"**/{p}" for p in include] + list(include), commit_message=f"update {name}")
-            return
-        except Exception as e:
-            if attempt == 3:
-                raise
-            print(f"hub push of {name} failed ({type(e).__name__}); retrying", flush=True)
-            time.sleep(30 * (attempt + 1))
+    _retried(f"push of {name}", lambda: _api().upload_folder(
+        folder_path=str(local), path_in_repo=f"runs/{name}", repo_id=REPO,
+        allow_patterns=[f"**/{p}" for p in include] + list(include), commit_message=f"update {name}"))
 
 
 def has(name: str, file: str = "done.json") -> bool:
     if not enabled():
         return False
     from huggingface_hub import file_exists
-    return file_exists(REPO, f"runs/{name}/{file}")
+    return _retried(f"check of {name}/{file}", lambda: file_exists(REPO, f"runs/{name}/{file}"))
 
 
 def pull(name: str, root: Path, last: bool = True) -> Path:
@@ -62,8 +68,9 @@ def pull(name: str, root: Path, last: bool = True) -> Path:
     never needs: ~95 MB of optimizer state per BLIP run)."""
     if enabled():
         from huggingface_hub import snapshot_download
-        tmp = snapshot_download(REPO, allow_patterns=[f"runs/{name}/*", f"runs/{name}/**/*"], local_dir=str(root / ".hub"),
-                                ignore_patterns=None if last else [f"runs/{name}/last/*"])
+        tmp = _retried(f"pull of {name}", lambda: snapshot_download(
+            REPO, allow_patterns=[f"runs/{name}/*", f"runs/{name}/**/*"], local_dir=str(root / ".hub"),
+            ignore_patterns=None if last else [f"runs/{name}/last/*"]))
         src = Path(tmp) / "runs" / name
         if src.exists():
             dst = root / name
