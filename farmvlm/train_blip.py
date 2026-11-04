@@ -165,7 +165,8 @@ def main():
         Every check keeps its per-item predictions (val/NN.jsonl): trials share the validation items, so any two
         checkpoints or runs compare item by item."""
         nonlocal checks
-        rows = predict(reader, val_items, image)
+        with torch.autocast("cuda", dtype=torch.float16):  # as in training: trained LayerNorm copies are fp32
+            rows = predict(reader, val_items, image)
         full = summarise(rows)
         (a.out / "val").mkdir(exist_ok=True)
         write(rows, full, a.out / "val" / f"{checks:02d}", lambda r: str(t.field[t.row_tile[r]]))
