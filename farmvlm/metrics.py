@@ -1,10 +1,11 @@
-"""Scoring per issues/06-evaluation-protocol.md: exact match, hedge credit, caption facts, calibration, bootstrap."""
+"""Scoring per issues/06-evaluation-protocol.md: exact match, hedge credit, partial credit, caption facts, calibration,
+bootstrap."""
 from collections import defaultdict
 
 import numpy as np
 
 from farmvlm.items import Item
-from farmvlm.scheme import EXTENTS, POSSIBLY
+from farmvlm.scheme import CELLS, EXTENTS, POSSIBLY
 from farmvlm.text import identify_set, normalise, parse_caption
 
 
@@ -38,6 +39,36 @@ def vqa_credit(item: Item, pred: str) -> float:
     return 0.5 if item.ambiguous and p in _sides(item.answer) else 0.0
 
 
+def _alternatives(answer: str) -> set[str]:
+    a = normalise(answer).removeprefix(POSSIBLY + " ")
+    for sep in (" to ", " or "):
+        if sep in a:
+            return set(a.split(sep))
+    return {a}
+
+
+CELL_RC = {c: divmod(k, 3) for k, c in enumerate(CELLS)}
+
+
+def partial_credit(family: str, truth: str, pred: str, strict: float) -> float:
+    """Exact-match credit, raised for near misses: an extent one size off or a neighbouring grid cell earn 0.5, and an
+    identify answer earns the overlap (Jaccard) of its class set with the truth's. Presence stays exact."""
+    t, p = _alternatives(truth), _alternatives(pred)
+    if family == "extent":
+        idx = lambda xs: [EXTENTS.index(x) for x in xs if x in EXTENTS]
+        near = any(abs(i - j) <= 1 for i in idx(t) for j in idx(p))
+        return max(strict, 0.5 * near)
+    if family == "location":
+        near = any(max(abs(CELL_RC[a][0] - CELL_RC[b][0]), abs(CELL_RC[a][1] - CELL_RC[b][1])) <= 1
+                   for a in t & CELL_RC.keys() for b in p & CELL_RC.keys())
+        return max(strict, 0.5 * near)
+    if family == "identify":
+        strip = lambda x: {c.removeprefix(POSSIBLY + " ") for c in identify_set(x)}
+        want, got = strip(truth), strip(pred)
+        return max(strict, len(want & got) / len(want | got) if want | got else 1.0)
+    return strict
+
+
 def margin_hedge(family: str, top: str, second: str, p_top: float, p_second: float, delta: float) -> str:
     """The ranked answer, or the scheme's hedge between the top two candidates when their probabilities are within delta."""
     if p_top - p_second >= delta:
@@ -59,14 +90,17 @@ def vqa_scores(items: list[Item], preds: list[str]) -> dict:
         return {"accuracy": None, "by_family": {}, "ambiguous_credit": None, "clear_accuracy": None,
                 "hedge_rate_ambiguous": None, "hedge_rate_clear": None}
     credit = np.array([vqa_credit(i, p) for i, p in zip(items, preds)], float)
+    partial = [partial_credit(i.family, i.answer, p, c) for i, p, c in zip(items, preds, credit)]
     amb = np.array([i.ambiguous for i in items], bool)
     hedged = np.array([is_hedge(p) for p in preds], bool)
-    by_family = defaultdict(list)
-    for i, c in zip(items, credit):
+    by_family, partial_by_family = defaultdict(list), defaultdict(list)
+    for i, c, pc in zip(items, credit, partial):
         by_family[i.family].append(c)
+        partial_by_family[i.family].append(pc)
     return {
         "accuracy": float(credit.mean()),
         "by_family": {f: float(np.mean(v)) for f, v in by_family.items()},
+        "partial_by_family": {f: float(np.mean(v)) for f, v in partial_by_family.items()},
         "ambiguous_credit": float(credit[amb].mean()) if amb.any() else None,
         "clear_accuracy": float(credit[~amb].mean()) if (~amb).any() else None,
         "hedge_rate_ambiguous": float(hedged[amb].mean()) if amb.any() else None,
