@@ -42,41 +42,6 @@ def predict(reader, items, image, batch=48, heldout=False, ranked=False):
     return rows
 
 
-# Views of a tile as sequences of perturb's geometric ops (counter-clockwise rot90): the first four are the flips and
-# the half turn, all eight the dihedral group. Aerial tiles have no "up", so each view is as valid as the original.
-VIEWS_D4 = ((), ("hflip",), ("rot90", "rot90"), ("hflip", "rot90", "rot90"),
-            ("rot90",), ("rot90", "rot90", "rot90"), ("hflip", "rot90"), ("hflip", "rot90", "rot90", "rot90"))
-
-
-def predict_tta(reader, items, image, views, batch=48):
-    """Ranked answers averaged over views of each tile. In every view each candidate is scored as the masks would read
-    there (location candidates and the question remapped), and the mean log-probability picks the answer. Captions are
-    read once, from the original view."""
-    from functools import reduce
-
-    from farmvlm.perturb import apply, remap, remap_loc
-    vqa = [i for i in items if i.family != "caption"]
-    cands = candidates(vqa)
-    rows = []
-    for b in chunks(vqa, batch):
-        total = None
-        for ops in views:
-            imgs = [reduce(lambda im, k: apply(im, k, None), ops, image(i.row)) for i in b]
-            qs = [render_question(reduce(remap, ops, i), 0) for i in b]
-            cs = [[reduce(lambda a, k: remap_loc(a, k), ops, c) for c in cands[i.family]] if i.family == "location"
-                  else cands[i.family] for i in b]
-            lps = reader.scores(imgs, qs, cs)
-            total = lps if total is None else [t + x for t, x in zip(total, lps)]
-        for i, t in zip(b, total):
-            p = (t / len(views)).softmax(0)
-            j = int(p.argmax())
-            rows.append({"item": i, "question": render_question(i, 0), "pred": cands[i.family][j], "conf": float(p[j]),
-                         "ranked": cands[i.family][j], "ranked_conf": float(p[j])})
-    for b in chunks([i for i in items if i.family == "caption"], batch):
-        rows += [{"item": i, "pred": c, "conf": cc} for i, (c, cc) in zip(b, reader.caption([image(i.row) for i in b]))]
-    return rows
-
-
 def summarise(rows, ranked=False) -> dict:
     vqa = [r for r in rows if r["item"].family != "caption"]
     caps = [r for r in rows if r["item"].family == "caption"]

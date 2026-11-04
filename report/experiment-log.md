@@ -237,3 +237,17 @@ The cycle-2 fold-0 adapters on fold 0's 1,000 inner-validation tiles (6,072 item
   - The 240k run already passes the finished 120k run at its own 120k mark, while its LR is still at half.
   - The 480k run (queued) shows where it bends.
 - **Qwen3.5-2B, cycle 2** (75 validation tiles): NDVI input 69.7 against RGB 67.3. NDVI evaluation, export and robustness follow.
+
+## 2026-11-05 02:45: averaging over flips and rotations does not help
+
+The ranked readout, averaged over views of each tile: in each view every candidate is scored as the masks would read there, then the mean log-probability picks the answer. Same cycle-2 fold-0 adapters, same 6,072 validation items.
+
+| Views | Four-question mean | Change vs one view (95% CI) | Inference time |
+|---|---|---|---|
+| 1 | 63.4 | | 302 s |
+| 4 (flips, half turn) | 63.4 | +0.0 [−0.5, +0.5] | 491 s |
+| 8 (the dihedral group) | 63.4 | +0.0 [−0.7, +0.8] | 1,303 s |
+
+- **Why it fails.** The model's errors do not depend on orientation, so averaging views has nothing to cancel. This matches the robustness suite, where flipped and rotated tiles score within 0.4 points of clean ones. The errors are systematic: the wrong anomaly or a far cell, not orientation noise.
+- **Decision:** one view. The code is removed. Commit 49512cd holds it for reproduction.
+- **Refactor check:** the one-view rerun after the ranker began returning full candidate scores reproduced every earlier ranked and generated answer (6,072 of 6,072).
