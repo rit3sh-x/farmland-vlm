@@ -96,7 +96,7 @@ def fetch(name: str, marker: str = "done.json") -> bool:
     if (RUNS / name / marker).exists():
         return True
     if hub.has(name, marker):
-        hub.pull(name, RUNS)
+        hub.pull(name, RUNS, last=False)
         return True
     return False
 

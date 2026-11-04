@@ -57,11 +57,13 @@ def has(name: str, file: str = "done.json") -> bool:
     return file_exists(REPO, f"runs/{name}/{file}")
 
 
-def pull(name: str, root: Path) -> Path:
-    """Download runs/<name>/ into root/<name>/ and return that path."""
+def pull(name: str, root: Path, last: bool = True) -> Path:
+    """Download runs/<name>/ into root/<name>/ and return that path; last=False skips last/ (resume state a finished run
+    never needs: ~95 MB of optimizer state per BLIP run)."""
     if enabled():
         from huggingface_hub import snapshot_download
-        tmp = snapshot_download(REPO, allow_patterns=[f"runs/{name}/*", f"runs/{name}/**/*"], local_dir=str(root / ".hub"))
+        tmp = snapshot_download(REPO, allow_patterns=[f"runs/{name}/*", f"runs/{name}/**/*"], local_dir=str(root / ".hub"),
+                                ignore_patterns=None if last else [f"runs/{name}/last/*"])
         src = Path(tmp) / "runs" / name
         if src.exists():
             dst = root / name
