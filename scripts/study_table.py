@@ -15,19 +15,28 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from compare_runs import FAMILIES, best_check, compare  # noqa: E402
 from farmvlm.report import gpu_minutes  # noqa: E402
 
-KNOBS = ("base", "size", "bands", "rank", "alpha", "lr", "targets", "dropout", "train_norms", "pairs")
+KNOBS = ("base", "size", "bands", "rank", "alpha", "lr", "targets", "dropout", "train_norms", "pairs", "train_seed")
 
 
 def rows(path: Path) -> list[dict]:
     return [json.loads(x) for x in open(path)] if path.exists() else []
 
 
+def config(run: Path) -> dict:
+    c = json.loads((run / "config.json").read_text())
+    return {**c, "train_seed": c.get("train_seed", c["seed"])}  # runs before --train-seed seeded training with --seed
+
+
 def row(run: Path, ref: Path, task: str) -> dict:
-    cfg, ref_cfg = json.loads((run / "config.json").read_text()), json.loads((ref / "config.json").read_text())
+    cfg, ref_cfg = config(run), config(ref)
+    same_length = ref.parent / f"pairs{cfg['pairs'] // 1000}k"
+    if cfg["pairs"] != ref_cfg["pairs"] and run != same_length and same_length.exists():  # a knob at another length
+        ref, ref_cfg = same_length, config(same_length)
     done = json.loads((run / "done.json").read_text()) if (run / "done.json").exists() else {}
     check = best_check(run)
     m = json.loads(check.with_suffix(".json").read_text())
-    r = {"trial": run.name, "change": ", ".join(f"{k}={cfg.get(k)}" for k in KNOBS if cfg.get(k) != ref_cfg.get(k)) or "reference",
+    change = ", ".join(f"{k}={cfg.get(k)}" for k in KNOBS if cfg.get(k) != ref_cfg.get(k)) or "reference"
+    r = {"trial": run.name, "change": change + (f" (vs {ref.name})" if ref.name != "ref" else ""),
          "done": "done.json" in {p.name for p in run.iterdir()}, "trainable_m": cfg["trainable"] / 1e6,
          "gpu_min": gpu_minutes(run), "peak_gb": done.get("peak_gpu_gb"),
          "pairs_per_s": statistics.median([x["train/pairs_per_s"] for x in rows(run / "train.jsonl")] or [float("nan")])}

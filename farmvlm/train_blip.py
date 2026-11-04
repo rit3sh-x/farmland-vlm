@@ -121,7 +121,9 @@ def main():
     ap.add_argument("--stats", type=Path, required=True)
     ap.add_argument("--root", type=Path, required=True)
     ap.add_argument("--fold", type=int, default=0)
-    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--seed", type=int, default=0, help="fixes the folds and the validation items")
+    ap.add_argument("--train-seed", type=int, help="LoRA init and training draws only (default: --seed): replicates of one "
+                    "recipe on the same validation items")
     ap.add_argument("--split", choices=["folds", "official"], default="folds",
                     help="official = train on the dataset's own train split (leakage study)")
     ap.add_argument("--rank", type=int, default=16)
@@ -146,8 +148,9 @@ def main():
     ap.add_argument("--resume", type=Path)
     a = ap.parse_args()
     a.alpha = a.alpha or 2 * a.rank
+    a.train_seed = a.seed if a.train_seed is None else a.train_seed
     a.out.mkdir(parents=True, exist_ok=True)
-    torch.manual_seed(a.seed)
+    torch.manual_seed(a.train_seed)
     t = StatsTable.load(a.stats)
     train_tiles, val_pool = split_tiles(t, a.split, a.fold, a.seed)
     val_tiles = np.random.default_rng(a.seed).choice(val_pool, min(a.val_tiles, len(val_pool)), replace=False)
@@ -188,7 +191,7 @@ def main():
                                                "peft": peft.__version__})
     (a.out / "config.json").write_text(json.dumps(cfg, indent=1))
     mix = "blip_vqa" if a.task == "vqa" else "blip_caption"
-    dl = DataLoader(Draws(t, a.root, train_tiles, mix, a.seed + (7919 if a.resume else 0), a.location_cell_share, a.size,
+    dl = DataLoader(Draws(t, a.root, train_tiles, mix, a.train_seed + (7919 if a.resume else 0), a.location_cell_share, a.size,
                           a.bands),
                     batch_size=a.batch, num_workers=2,
                     collate_fn=collate(proc, a.task, model.config.text_config.bos_token_id), prefetch_factor=4)

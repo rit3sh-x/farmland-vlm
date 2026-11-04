@@ -43,6 +43,10 @@ STUDY = [("ref", {}, BOTH), ("size512", {"size": 512}, BOTH), ("rank128", {"rank
          ("dropout0", {"dropout": 0.0}, VQA), ("dropout0.1", {"dropout": 0.1}, VQA), ("dropout0.2", {"dropout": 0.2}, VQA),
          ("pairs60k", {"pairs": 60_000}, VQA), ("pairs120k", {"pairs": 120_000}, VQA),
          ("pairs240k", {"pairs": 240_000}, VQA), ("pairs480k", {"pairs": 480_000}, VQA)]
+# Round 2, from the first results: two training-seed replicates of the reference measure run-to-run noise, which the
+# field bootstrap does not cover; rank 256 (+1.3 at 30k) at the cycle-2 length checks the gain survives longer training.
+STUDY2 = [("ref-seed1", {"train_seed": 1}, VQA), ("ref-seed2", {"train_seed": 2}, VQA),
+          ("rank256-pairs120k", {"rank": 256, "pairs": 120_000}, VQA)]
 STUDY_PAIRS, STUDY_VAL_TILES = 30_000, 1000
 SERVED_PAIRS = 30_000  # per cycle: Qwen3.5-2B trains at ~146 min per 10k pairs on a T4
 # Cycle 2 restarts the cosine schedule from cycle 1's best adapter (its validation was still rising at 30k pairs).
@@ -212,13 +216,14 @@ def main():
                    patience=99, location_cell_share=0.65)
         evaluate("balanced", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", adapter("blip-vqa-f0-balanced"),
                  "--caption-adapter", adapter("blip-caption-f0"), marker="f0.json")
-    if want("study"):
-        k, n = map(int, a.study_part.split("/"))
-        for trial, change, tasks in STUDY[k::n]:
+    k, n = map(int, a.study_part.split("/"))
+    for stage, trials in (("study", STUDY), ("study2", STUDY2)):
+        for trial, change, tasks in trials[k::n] if want(stage) else []:
             for t in tasks:
                 kw = {**STUDY_REF, "pairs": STUDY_PAIRS, **change}
                 train_blip(f"study-{t}/{trial}", a, t, fold=0, **kw, eval_every=max(10_000, kw["pairs"] // 6),
                            val_tiles=STUDY_VAL_TILES, patience=99)
+    if want("study"):
         # Decoding needs no training: the cycle-2 fold-0 adapters with beam search, against blip-lora/f0 (greedy)
         evaluate("study-decode-beams3", a, "eval_blip.py", "--folds", 0, "--beams", 3, "--vqa-adapter", adapter("blip-vqa-f0"),
                  "--caption-adapter", adapter("blip-caption-f0"), marker="f0.json")
