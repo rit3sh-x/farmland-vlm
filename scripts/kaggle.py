@@ -18,20 +18,24 @@ from farmvlm.hub import HOME  # noqa: E402
 
 MACHINE = os.environ.get("FARMVLM_MACHINE") or ("kaggle" if Path("/kaggle/working").exists() else "molab")
 LOGS = Path("/kaggle/working") if MACHINE == "kaggle" else HOME
-GROUP_MIB = 20_000  # a T4-sized pipeline peaks under 16 GB
+GROUP_MIB = 16_000  # a T4-sized pipeline peaks under 16 GB (BLIP base 8 GB, Qwen3.5-2B under 15 GB)
 
 # Pipeline arguments per group; groups run in parallel, one per GPU slot, and queue when there are more groups than slots.
 # Kaggle and molab split what remained after Kaggle session 1 so both could run at once on disjoint runs: molab extracts
 # only the RGB images (its sandbox died extracting all 21 GB) and takes every RGB stage; Kaggle takes what needs NIR or
-# the masks. The workstation (from 2026-11-04, Colab off) takes everything left: the BLIP scoring and suites, then the
-# hyperparameter study on one slot; Qwen RGB scoring and export, then Qwen NDVI cycle 2 last, on the other.
+# the masks. The workstation (from 2026-11-04, Colab off) takes everything left on three slots of its 48 GB card: the
+# BLIP scoring and suites, then a third of the study; another third of the study, then the last; Qwen RGB scoring and
+# export, then Qwen NDVI cycle 2. One BLIP run keeps the GPU only about half busy (kernel launches bound it), so
+# parallel runs, not a bigger batch, use the rest; the batch stays part of the recipe.
 GROUPS = {
     "kaggle": (["--only", "served", "export", "served-robustness", "--variants", "served-ndvi"], ["--only", "heatmaps"]),
     "molab": (["--only", "blip", "robustness", "balanced"],
               ["--only", "served", "export", "served-robustness", "--variants", "served-rgb"]),
     "workstation": (["--only", "blip", "robustness", "heatmaps", "balanced"],
+                    ["--only", "study", "--study-part", "0/3"],
                     ["--only", "served", "export", "served-robustness", "--variants", "served-rgb"],
-                    ["--only", "study"],
+                    ["--only", "study", "--study-part", "1/3"],
+                    ["--only", "study", "--study-part", "2/3"],
                     ["--only", "served", "export", "served-robustness", "--variants", "served-ndvi"]),
 }[MACHINE]
 

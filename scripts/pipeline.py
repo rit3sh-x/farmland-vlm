@@ -158,6 +158,7 @@ def main():
     ap.add_argument("--only", nargs="*")
     ap.add_argument("--tasks", nargs="*", default=["vqa", "caption"], choices=["vqa", "caption"], help="BLIP tasks to sweep and train")
     ap.add_argument("--folds", nargs="*", type=int, default=list(range(5)), help="BLIP folds to train")
+    ap.add_argument("--study-part", default="0/1", help="k/n: this pipeline trains study trials k, k+n, k+2n, ... (parallel slots)")
     ap.add_argument("--variants", nargs="*", default=[n for n, _ in SERVED_VARIANTS], choices=[n for n, _ in SERVED_VARIANTS],
                     help="served variants to train, score, export and stress-test (one per GPU on Kaggle)")
     a = ap.parse_args()
@@ -210,7 +211,8 @@ def main():
         evaluate("balanced", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", adapter("blip-vqa-f0-balanced"),
                  "--caption-adapter", adapter("blip-caption-f0"), marker="f0.json")
     if want("study"):
-        for trial, change, tasks in STUDY:
+        k, n = map(int, a.study_part.split("/"))
+        for trial, change, tasks in STUDY[k::n]:
             for t in tasks:
                 kw = {**STUDY_REF, "pairs": STUDY_PAIRS, **change}
                 train_blip(f"study-{t}/{trial}", a, t, fold=0, **kw, eval_every=max(10_000, kw["pairs"] // 6),

@@ -69,14 +69,16 @@ class Profile:
 
     def step(self, step):
         if step == self.start:
+            from torch._C._profiler import _ExperimentalConfig
             from torch.profiler import ProfilerActivity, profile
             self.prof = profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True,
-                                profile_memory=True, with_stack=True)
+                                profile_memory=True, with_stack=True,
+                                experimental_config=_ExperimentalConfig(verbose=True))  # else export_stacks writes nothing
             self.prof.start()
         elif step == self.stop and self.prof:
             self.prof.stop()
             self.out.mkdir(parents=True, exist_ok=True)
-            self.prof.export_chrome_trace(str(self.out / "trace.json"))
+            self.prof.export_chrome_trace(str(self.out / "trace.json.gz"))  # ~0.4 GB raw; .gz also keeps it off the Hub
             self.prof.export_stacks(str(self.out / "stacks_cuda.txt"), "self_cuda_time_total")
             self.prof.export_stacks(str(self.out / "stacks_cpu.txt"), "self_cpu_time_total")
             (self.out / "top_ops.txt").write_text(self.prof.key_averages().table(sort_by="cuda_time_total", row_limit=40))
