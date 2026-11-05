@@ -67,7 +67,7 @@ Caption: ``Large drydown throughout the tile, with small weed cluster at the top
 \item \texttt{blip-vqa-base} for questions, \texttt{blip-image-captioning-base} for captions, 384 px.
 \item fp16 base, fp32 LoRA, cosine schedule, clipping, loss scaler.
 \item One-knob-at-a-time sweep on fold 0's inner validation: rank, then learning rate, then target modules.
-\item Final: rank 64, LR capped at $2\!\times\!10^{-4}$, up to 120k pairs per fold, early stopping in the second half.
+\item Final: rank 64, query/value adapters, LR capped at $2\!\times\!10^{-4}$, \finalPairs\ pairs per fold (length chosen on validation), best second-half check kept.
 \end{itemize}
 \column{0.5\textwidth}
 \textbf{Served: a newer VLM for the laptop}
@@ -85,7 +85,7 @@ Caption: ``Large drydown throughout the tile, with small weed cluster at the top
 \item Tiles from one field are near-duplicates, so 5-fold \texttt{StratifiedGroupKFold} groups by field and stratifies on the rarest class. Folds are regenerated from a seed recorded per run; no split file is saved.
 \item Each training fold holds out 10\% of its fields as inner validation for checkpoint choice. Test folds are never seen before final scoring.
 \item Per fold about 2,000 test tiles, 11,000 questions and 2,200 captions. BLIP rows: 5 folds, mean $\pm$ std. Served rows: fold 0 with field-bootstrap 95\% intervals and paired differences.
-\item Strict exact match after normalising; a ranked readout over the fixed answer list; caption fact precision/recall/F1 plus BLEU, ROUGE-L and CIDEr.
+\item Strict exact match after normalising. Headline readout: rank the type's fixed answer list by likelihood (chosen on validation); greedy generation reported too. Captions: fact precision/recall/F1 plus BLEU, ROUGE-L and CIDEr.
 \item \textbf{The floor to clear:} the single best answer per question type, chosen with hindsight, scores \constMean\% on average.
 \end{itemize}
 \end{frame}
@@ -94,8 +94,8 @@ Caption: ``Large drydown throughout the tile, with small weed cluster at the top
 \centering
 \resizebox{\textwidth}{!}{\input{tables/ablation.tex}}
 \begin{itemize}
-\item Mean over question types: \zeroMean\% zero-shot, \constMean\% for the best constant answer, \textbf{\blipMean\,$\pm$\,\blipMeanStd\%} after LoRA (ranked readout \blipRanked\%).
-\item Presence \blipPresence\%, identify \blipIdentify\%, extent \blipExtent\%. Location \blipLocation\% barely beats \constLocation\% for always saying \emph{throughout}.
+\item Mean over question types: \zeroMean\% zero-shot, \constMean\% for the best constant answer, \textbf{\blipMean\,$\pm$\,\blipMeanStd\%} after LoRA (greedy \blipGreedy\%).
+\item Presence \blipPresence\%, identify \blipIdentify\%, extent \blipExtent\%. Location \blipLocation\% against \constLocation\% for always saying \emph{throughout}: the smallest gain over its floor.
 \item Caption fact F1 from 0 to \blipFactF\%; CIDEr stays near zero because every caption shares one template vocabulary.
 \end{itemize}
 \end{frame}
@@ -110,7 +110,7 @@ Caption: ``Large drydown throughout the tile, with small weed cluster at the top
 \includegraphics[width=0.95\textwidth]{figures/sweep.pdf}
 \begin{itemize}
 \item Rank is the clearest lever; learning rate the second. Text-only adapters are not enough: the image encoder must adapt to aerial imagery.
-\item Questions prefer query/value adapters in every attention layer; captions preferred every linear layer (this changed in v2, next slides).
+\item Both tasks prefer query/value adapters in every attention layer. (In v1, with captions that never ended, captions had preferred every linear layer.)
 \end{itemize}
 \end{frame}
 
@@ -140,7 +140,7 @@ Caption: ``Large drydown throughout the tile, with small weed cluster at the top
 
 \begin{frame}{Robustness: paraphrased questions and perturbed images}
 \centering
-\includegraphics[width=0.95\textwidth]{figures/robustness.pdf}
+\includegraphics[width=0.95\textwidth,height=0.58\textheight,keepaspectratio]{figures/robustness.pdf}
 \begin{itemize}
 \item Lighting and flips cost nothing; blur, noise and lost resolution degrade smoothly; heavy JPEG costs \blipJpegDrop\ points.
 \item The largest drop is new question wording: \blipParaphraseDrop\ points for BLIP, 4--5 for Qwen, whose language model has met many ways to ask.
@@ -150,7 +150,7 @@ Caption: ``Large drydown throughout the tile, with small weed cluster at the top
 \begin{frame}{Does the official split leak?}
 \begin{columns}
 \column{0.45\textwidth}
-\input{tables/leakage.tex}
+\resizebox{\textwidth}{!}{\input{tables/leakage.tex}}
 \column{0.55\textwidth}
 \begin{itemize}
 \item 480 of the dataset's fields have flights in both official train and validation.
@@ -174,8 +174,8 @@ Caption: ``Large drydown throughout the tile, with small weed cluster at the top
 \centering
 \resizebox{\textwidth}{!}{\input{tables/fold0.tex}}
 \begin{itemize}
-\item Qwen3.5-2B after 30k pairs: \qwenRgbMean\% (RGB), \qwenNdviMean\% (RGB + NDVI). It trails BLIP on presence, matches it on identify and location, and its captions are more precise (\qwenNdviPrecision\% vs \blipFoldPrecision\%).
-\item NDVI adds \ndviDiff\ points (95\% CI \ndviLo\ to \ndviHi), concentrated on nutrient deficiency, drydown and waterways: the anomalies that change near-infrared reflectance.
+\item Qwen3.5-2B after 60k pairs: \qwenRgbMean\% (RGB), \qwenNdviMean\% (RGB + NDVI), greedy like BLIP's row here. Most of its gap is presence; captions \qwenNdviPrecision\% precise against BLIP's \blipFoldPrecision\%.
+\item NDVI: \ndviDiff\ points overall (95\% CI \ndviLo\ to \ndviHi). Presence F1 rises for drydown (+7.0) and nutrient deficiency (+6.1), the anomalies that change near-infrared reflectance, and is flat for most others.
 \item DoRA matches LoRA (\doraDiff\ points) at 29\% more training time.
 \end{itemize}
 \end{frame}
@@ -212,10 +212,36 @@ Model + adapters in RAM & about 3 GB \\
 \end{itemize}
 \end{frame}
 
+\begin{frame}{What raised the ceiling? A study on validation}
+\begin{itemize}
+\item One change at a time from the v2 recipe on fold 0, 30k pairs, 1,000 inner-validation tiles. Three seeds of the unchanged recipe span 56.5--58.2: a single run carries about a point of noise.
+\item At 30k, capacity helps a little: rank 256 +1.3 (two seeds), every linear layer +1.7 at $3.4\times$ the parameters. At 120k neither holds (+0.6 and +0.8, intervals across zero).
+\item Dropout, $\alpha$, LayerNorms, 512 px, a NIR--red--green image: within noise. BLIP-large captions: no better at $4\times$ the compute; no BLIP-large VQA checkpoint exists.
+\item \textbf{Length} is far outside the noise: +2.6 at 60k, +4.4 at 120k, +5.5 at 240k, +6.9 at 480k.
+\item Readout: ranking the fixed answer list beats greedy by 1.1 (0.4 to 1.8); beam search $-0.2$; flip/rotation averaging $+0.0$; two-seed averaging +0.8 against +1.9 for the same compute spent on length.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Length, chosen on validation, confirmed held out}
+\begin{columns}
+\column{0.58\textwidth}
+\resizebox{\textwidth}{!}{\input{tables/cycles.tex}}
+\medskip
+\begin{itemize}\small
+\item Rule fixed before any of these held-out scores were read: the cycle with the best five-fold validation wins. Held-out folds never choose.
+\item Cycle \finalCycle\ (\finalPairs): \textbf{\blipMean\%} held out, +\finalChange\ over the cycle before (\finalChangeLo\ to \finalChangeHi, \finalChangeFolds/5 folds), +\totalChange\ over cycle 2.
+\item Captions at 480k: fact F1 \vtwoFactF\% $\to$ \blipFactF\%.
+\end{itemize}
+\column{0.42\textwidth}
+\includegraphics[width=\textwidth]{figures/length_curve.pdf}
+\end{columns}
+\end{frame}
+
 \begin{frame}{Limitations and conclusions}
 \begin{itemize}
 \item BLIP reads RGB only while the annotators also saw near infrared; extent is the only severity signal; captions come from templates; served rows use one fold; NDVI from these cameras is relative.
-\item Masks can be turned into language that a small VLM learns to read: LoRA lifts BLIP from below a constant-answer floor to two thirds of questions right on unseen fields, with confidence that supports abstaining.
+\item Masks can be turned into language that a small VLM learns to read: LoRA lifts BLIP from below a constant-answer floor to \blipMean\% of questions right on unseen fields, with confidence that supports abstaining.
+\item After the fixes, length beat capacity: rank, target modules, input size and BLIP-large stayed inside seed noise, while four doublings of training pairs added \totalChange\ points held out.
 \item A learning rate that wins a short sweep can fail a long run; the official split's shared fields turned out harmless; a near-infrared view helps exactly the anomalies it should.
 \item Code: \url{github.com/rit3sh-x/farmland-vlm}. Every table and figure rebuilds from the run records.
 \end{itemize}
