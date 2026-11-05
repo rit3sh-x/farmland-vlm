@@ -430,3 +430,16 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
   - **Fold 0 is the probe itself,** copied to `c4-caption-f0`. Training is deterministic and validation never touches the weights, so retraining it would reproduce the same adapter. Its `config.json` still records the random-protocol validation it was checked on.
   - **Folds 1–4** check on the test-protocol draw, and queue behind cycle 5's folds 1 and 2 to keep the shared card under about 40 GB.
 - **Captions are scored held out** together with whichever VQA cycle the validation rule picks.
+
+## 2026-11-06 01:20: cycle 5 leads on every fold's validation; a 1.92M probe
+
+- **Validation, cycle 4 (480k) against cycle 5 (960k):**
+
+  | Fold | 0 | 1 | 2 | 3 | 4 |
+  |---|---|---|---|---|---|
+  | Cycle 4 | 67.8 | 71.2 | 69.7 | 71.4 | 67.5 |
+  | Cycle 5 | 70.7 | 72.4 | 72.7 | 72.0 | 68.5 (160k pairs left) |
+
+  The formal choice waits for fold 4 to finish.
+- **Each fold, from cycle 3 to 4 to 5,** has gained about 1.5 to 2 points of validation per doubling. Nothing has turned down yet, and a validation drop would be the sign of overfitting.
+- **Next probe:** 1.92M pairs (`c6-vqa-f0`) on fold 0, in the slot cycle 5 fold 3 freed. It takes about 18 hours on the shared card. The other folds follow only if fold 0's validation rises again, under the same five-fold rule.
