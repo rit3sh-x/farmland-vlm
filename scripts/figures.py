@@ -16,16 +16,17 @@ import numpy as np  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from farmvlm.metrics import risk_coverage, vqa_credit  # noqa: E402
-from farmvlm.report import FAMILIES, credits, item_of, rows  # noqa: E402
+from farmvlm.report import FAMILIES, chosen_cycle, credits, final_run, item_of, rows, table_cycles  # noqa: E402
 
 # One colour per model across every figure (validated for colour-vision deficiency on white; dataviz palette).
 INK, MUTED, GRID = "#1a1a19", "#6b6a64", "#e4e3de"
 MODELS = {  # run name -> (label, colour)
     "baseline": ("Zero-shot BLIP", "#9a9992"),
-    "blip-lora": ("BLIP-LoRA", "#2a78d6"),
+    "final": ("BLIP-LoRA", "#2a78d6"),  # main() renames the key to the chosen cycle's held-out record
     "served-rgb-eval": ("Qwen3.5-2B LoRA, RGB", "#eb6834"),
     "served-ndvi-eval": ("Qwen3.5-2B LoRA, RGB + NDVI", "#1baf7a"),
 }
+BLIP_COLOUR = "#2a78d6"
 LR_COLOURS = {"2e-4": "#2a78d6", "5e-4": "#e34948"}
 TASK_COLOURS = {"vqa": "#2a78d6", "caption": "#eda100"}
 FAMILY_LABELS = {"presence": "Is X present?", "identify": "Which anomaly?", "extent": "How much area?", "location": "Where?"}
@@ -121,7 +122,8 @@ def accuracy(rs: list[dict]) -> float:
 
 def robustness(runs: Path, out: Path):
     """Accuracy change from clean under each perturbation; Qwen on the first 200 of BLIP's 500 tiles, so BLIP is re-scored there too."""
-    blip = runs / "robust-blip-lora"
+    blip = runs / f"robust-c{chosen_cycle(runs)}"
+    final = next(n for n, (label, _) in MODELS.items() if label == "BLIP-LoRA")
     if not (blip / "f0-clean.jsonl").exists():
         return
     names = sorted(p.name.removesuffix(".jsonl").removeprefix("f0-") for p in blip.glob("f0-*.jsonl"))
@@ -132,7 +134,7 @@ def robustness(runs: Path, out: Path):
     fig, axes = plt.subplots(1, 2 if served else 1, figsize=(6.3, 3.8), squeeze=False)
     ax = axes[0][0]
     order = sorted(names, key=lambda n: drops[n])
-    ax.barh(range(len(order)), [drops[n] for n in order], 0.7, color=MODELS["blip-lora"][1])
+    ax.barh(range(len(order)), [drops[n] for n in order], 0.7, color=MODELS[final][1])
     ax.set_yticks(range(len(order)), [perturbation(n) for n in order])
     ax.axvline(0, color=MUTED, lw=0.8)
     ax.grid(axis="x")
@@ -143,13 +145,13 @@ def robustness(runs: Path, out: Path):
         rows_of = {n: {r["row"] for r in rows(runs / f"robust-{n}" / "f0-clean.jsonl")} for n in served}
         shared = sorted(p.name.removesuffix(".jsonl").removeprefix("f0-") for p in (runs / f"robust-{served[0]}").glob("f0-*.jsonl"))
         shared = [n for n in shared if n != "clean"]
-        series = [("blip-lora", blip)] + [(f"served-{n.split('-')[1]}-eval", runs / f"robust-{n}") for n in served]
+        series = [(final, blip)] + [(f"served-{n.split('-')[1]}-eval", runs / f"robust-{n}") for n in served]
         subset = rows_of[served[0]]
         change = {}
         for model, d in series:
             c = accuracy([r for r in rows(d / "f0-clean.jsonl") if r["row"] in subset])
             change[model] = {n: accuracy([r for r in rows(d / f"f0-{n}.jsonl") if r["row"] in subset]) - c for n in shared}
-        shared = sorted(shared, key=lambda n: change["blip-lora"][n])
+        shared = sorted(shared, key=lambda n: change[final][n])
         y, h = np.arange(len(shared)), 0.8 / len(series)
         for k, (model, _) in enumerate(series):
             ax.barh(y + 0.4 - h * (k + 0.5), [change[model][n] for n in shared], h * 0.88, color=MODELS[model][1], label=MODELS[model][0])
@@ -161,6 +163,27 @@ def robustness(runs: Path, out: Path):
         ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), fontsize=6)
     fig.tight_layout()
     fig.savefig(out / "robustness.pdf")
+    plt.close(fig)
+
+
+def length_curve(runs: Path, out: Path):
+    """The length cycles: held-out four-question mean (ranked and greedy readouts, mean and sd over five folds) and the
+    selection score (mean best second-half validation) against training pairs."""
+    t = table_cycles(runs)
+    x = np.array([r["pairs"] for r in t]) / 1000
+    fig, ax = plt.subplots(figsize=(3.1, 2.4))
+    for key, label, colour in (("ranked", "Held out, ranked", "#2a78d6"), ("greedy", "Held out, greedy", "#eb6834")):
+        m, sd = np.array([r[key][0] for r in t]) * 100, np.array([r[key][1] for r in t]) * 100
+        ax.errorbar(x, m, yerr=sd, color=colour, lw=2, marker="o", ms=4, capsize=2, label=label)
+    v = [(xi, r["val"] * 100) for xi, r in zip(x, t) if r["val"]]
+    ax.plot(*zip(*v), color="#1baf7a", lw=2, marker="s", ms=4, ls="--", label="Validation (selection score)")
+    ax.set_xscale("log", base=2)
+    ax.set_xticks(x, [f"{int(p)}k" for p in x])
+    ax.minorticks_off()
+    ax.set_xlabel("Training pairs per fold")
+    ax.set_ylabel("Mean over question types (%)")
+    ax.legend(loc="lower right", fontsize=6)
+    fig.savefig(out / "length_curve.pdf")
     plt.close(fig)
 
 
@@ -209,12 +232,12 @@ def dataset(stats: Path, out: Path):
     full = t.row_view == VIEWS.index("full")
     area = t.area[full][t.area[full] > 0].astype(np.float32)
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(6.3, 2.3), gridspec_kw={"width_ratios": [1.2, 1]})
-    a1.barh(range(len(order)), [100 * pres[:, k].mean() for k in order][::-1], 0.7, color=MODELS["blip-lora"][1])
+    a1.barh(range(len(order)), [100 * pres[:, k].mean() for k in order][::-1], 0.7, color=BLIP_COLOUR)
     a1.set_yticks(range(len(order)), [CLASSES[k].name for k in order][::-1])
     a1.set_xlabel("Share of labelled tiles with the class (%)")
     a1.grid(axis="x")
     a1.grid(axis="y", visible=False)
-    a2.hist(100 * area, bins=60, range=(0, 100), color=MODELS["blip-lora"][1])
+    a2.hist(100 * area, bins=60, range=(0, 100), color=BLIP_COLOUR)
     for c, label, h in zip(EXTENT_CUTS, ("small | moderate", "moderate | large"), (0.92, 0.78)):
         a2.axvline(100 * c, color=INK, lw=0.9, ls="--")
         a2.text(100 * c + 1.5, a2.get_ylim()[1] * h, label, fontsize=6, color=INK)
@@ -232,7 +255,9 @@ def main():
     ap.add_argument("--out", type=Path, default=Path("report/figures"))
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
-    for make in (family_bars, lr_curves, risk_coverage_plot, robustness, sweep):
+    global MODELS
+    MODELS = {final_run(a.runs) if k == "final" else k: v for k, v in MODELS.items()}
+    for make in (family_bars, lr_curves, risk_coverage_plot, robustness, sweep, length_curve):
         try:
             make(a.runs, a.out)
             print("made", make.__name__, flush=True)

@@ -16,10 +16,40 @@ from farmvlm.text import lenient_answer
 from farmvlm.scheme import CLASSES, CLASS_INDEX, THROUGHOUT
 
 FAMILIES = ("presence", "identify", "extent", "location")
-FOLD0_ROWS = (("baseline", "Zero-shot BLIP"), ("blip-lora", "BLIP-LoRA"), ("dora", "BLIP-DoRA v1"),
-              ("balanced", "BLIP-LoRA, balanced location draws"),
-              ("served-zeroshot-eval", "Qwen3.5-2B, zero-shot"), ("served-rgb-eval", "Qwen3.5-2B LoRA, RGB"),
-              ("served-ndvi-eval", "Qwen3.5-2B LoRA, RGB + NDVI"))
+# Held-out record of each training-length cycle (VQA adapters of that cycle, cycle 2's caption adapters) and its pairs.
+CYCLES = (("blip-lora", 2, 120_000), ("c3-blip", 3, 240_000), ("c4-blip", 4, 480_000), ("c5-blip", 5, 960_000),
+          ("c6-blip", 6, 1_920_000))
+T95 = {1: 12.71, 2: 4.30, 3: 3.18, 4: 2.78}  # two-sided 95% t quantiles by degrees of freedom
+
+
+def cycle_validation(runs: Path, cycle: int) -> float | None:
+    """The selection score of a cycle: the mean over its five folds of each fold's best second-half validation check."""
+    done = [runs / f"c{cycle}-vqa-f{k}" / "done.json" for k in range(5)]
+    return float(np.mean([json.loads(p.read_text())["best_val"] for p in done])) if all(p.exists() for p in done) else None
+
+
+def chosen_cycle(runs: Path) -> int:
+    """The rule fixed on 2026-11-05 at 10:00, before any held-out score was read: of the cycles trained on all five
+    folds, the one with the highest selection score. Held-out scores never enter."""
+    val = {c: cycle_validation(runs, c) for _, c, _ in CYCLES[1:]}
+    return max((c for c in val if val[c] is not None), key=val.get)
+
+
+def final_run(runs: Path) -> str:
+    """The final model's held-out record: the chosen cycle's VQA adapters with the 480k-pair caption adapters."""
+    return f"c{chosen_cycle(runs)}-capc4-blip"
+
+
+def fold0_rows(final: str) -> tuple:
+    """(run, label, run its paired difference is taken against) for the fold-0 table."""
+    return (("baseline", "Zero-shot BLIP", final), ("archive/v1/blip-lora", "BLIP-LoRA v1", final),
+            ("blip-lora", "BLIP-LoRA v2", final), (final, "BLIP-LoRA", final),
+            ("dora", "BLIP-DoRA v1", "archive/v1/blip-lora"),  # DoRA trained in the first cycle: paired with that LoRA
+            ("balanced", "BLIP-LoRA v2, balanced location draws", "blip-lora"),  # an ablation of the v2 recipe
+            ("served-zeroshot-eval", "Qwen3.5-2B, zero-shot", final),
+            ("archive/v1/served-rgb-eval", "Qwen3.5-2B LoRA, RGB v1", final), ("served-rgb-eval", "Qwen3.5-2B LoRA, RGB", final),
+            ("archive/v1/served-ndvi-eval", "Qwen3.5-2B LoRA, RGB + NDVI v1", final),
+            ("served-ndvi-eval", "Qwen3.5-2B LoRA, RGB + NDVI", final))
 
 
 def rows(path: Path) -> list[dict]:
@@ -36,7 +66,7 @@ def credits(rs, key="pred"):
 
 def mean_std(xs):
     xs = [x for x in xs if x is not None]
-    return (float(np.mean(xs)), float(np.std(xs))) if xs else (None, None)
+    return (float(np.mean(xs)), float(np.std(xs, ddof=1)) if len(xs) > 1 else 0.0) if xs else (None, None)
 
 
 def fmt(m, s=None, pct=True):
@@ -46,10 +76,37 @@ def fmt(m, s=None, pct=True):
     return f"{m * k:.1f}" + (f" $\\pm$ {s * k:.1f}" if s is not None else "")
 
 
-def table_ablation(runs: Path) -> list[dict]:
-    """Table 1: Baseline vs BLIP-LoRA over 5 folds, with the archived v1 BLIP-LoRA row when v2 has replaced it."""
+def fold_means(runs: Path, name: str, readout: str = "vqa_ranked", key: str = "by_family") -> list[float]:
+    """The four-question mean of each scored fold of a held-out record."""
+    ms = [json.loads(p.read_text()) for p in sorted((runs / name).glob("f[0-4].json"))]
+    return [float(np.mean([m[readout][key][f] for f in FAMILIES])) for m in ms]
+
+
+def table_cycles(runs: Path) -> list[dict]:
+    """Held-out four-question mean per training-length cycle over five folds, with the change from the cycle before as
+    a paired t interval over folds; the selection score beside it."""
+    out, prev = [], None
+    for name, cycle, pairs in CYCLES:
+        ranked = fold_means(runs, name)
+        if len(ranked) < 5:
+            continue
+        row = {"cycle": cycle, "pairs": pairs, "val": cycle_validation(runs, cycle) if cycle > 2 else None,
+               "ranked": mean_std(ranked), "greedy": mean_std(fold_means(runs, name, "vqa_generated")),
+               "partial": mean_std(fold_means(runs, name, key="partial_by_family")), "change": None}
+        if prev:
+            d = np.array(ranked) - np.array(prev)
+            h = T95[len(d) - 1] * d.std(ddof=1) / np.sqrt(len(d))
+            row["change"] = (float(d.mean()), float(d.mean() - h), float(d.mean() + h), int((d > 0).sum()))
+        out.append(row)
+        prev = ranked
+    return out
+
+
+def table_ablation(runs: Path, final: str) -> list[dict]:
+    """Table 1: Baseline vs BLIP-LoRA over 5 folds, with the first and second cycles' rows above the final one."""
     out = []
-    for name, label in (("baseline", "Zero-shot BLIP"), ("archive/v1/blip-lora", "BLIP-LoRA v1"), ("blip-lora", "BLIP-LoRA")):
+    for name, label in (("baseline", "Zero-shot BLIP"), ("archive/v1/blip-lora", "BLIP-LoRA v1"), ("blip-lora", "BLIP-LoRA v2"),
+                        (final, "BLIP-LoRA")):
         ms = [json.loads(p.read_text()) for p in sorted((runs / name).glob("f[0-4].json"))]
         if not ms:
             continue
@@ -81,7 +138,7 @@ def table_constant(runs: Path) -> dict:
     return {f: mean_std([d[f] for d in folds]) for f in FAMILIES} | {"mean": mean_std([np.mean(list(d.values())) for d in folds])}
 
 
-def table_per_class(runs: Path, names=("baseline", "blip-lora", "served-rgb-eval", "served-ndvi-eval")) -> dict:
+def table_per_class(runs: Path, names: tuple) -> dict:
     """Table 2: presence accuracy and yes-F1 per class (fold 0, plus the clean slice reported separately)."""
     res = {}
     for name in names:
@@ -110,18 +167,12 @@ def aligned(runs: Path, a: str, b: str, fold: int = 0):
     return ca, cb, np.array([ka[k]["field"] for k in keys])
 
 
-def with_v1(rows_: tuple) -> list[tuple]:
-    """Each (run, label) preceded by its archived v1 record, named archive/v1/<run>, labelled "<label> v1"."""
-    return [r for name, label in rows_ for r in ((f"archive/v1/{name}", f"{label} v1"), (name, label))]
-
-
-def table_fold0(runs: Path) -> list[dict]:
+def table_fold0(runs: Path, final: str) -> list[dict]:
     """Table 3: fold-0 comparison with field-grouped 95% CIs and paired differences against BLIP-LoRA."""
     out = []
-    for name, label in with_v1(FOLD0_ROWS):
+    for name, label, ref in fold0_rows(final):
         if not (runs / name / "f0.jsonl").exists():
             continue
-        ref = "archive/v1/blip-lora" if name == "dora" else "blip-lora"  # DoRA trained in the first cycle: pair it with that LoRA
         ca, cb, g = aligned(runs, name, ref)
         paired = name != ref and len(ca) > 0
         if not len(ca):  # the reference is not scored yet: pooled accuracy over the model's own items, no paired difference
@@ -132,7 +183,7 @@ def table_fold0(runs: Path) -> list[dict]:
         caps = [x for x in all_rows if x["family"] == "caption"]
         lenient = {f: float(np.mean([vqa_credit(item_of(x), lenient_answer(f, x["pred"])) for x in rs if x["family"] == f]))
                    for f in FAMILIES}
-        out.append({"model": label, "acc": grouped_bootstrap(ca, g), "diff": grouped_bootstrap(ca, g, other=cb) if paired else None,
+        out.append({"model": label, "run": name, "acc": grouped_bootstrap(ca, g), "diff": grouped_bootstrap(ca, g, other=cb) if paired else None,
                     "by_family": m["vqa_generated"]["by_family"], "by_family_lenient": lenient,
                     "caption": {k: m["caption_facts"][k] for k in ("precision", "recall", "f1")},
                     "caption_words": float(np.mean([len(str(x["pred"]).split()) for x in caps])) if caps else None,
@@ -151,10 +202,10 @@ def first_ref(r: dict) -> str:
     return refs[0] if refs else ""
 
 
-def table_caption_examples(runs: Path, fold: int = 0) -> list[dict]:
+def table_caption_examples(runs: Path, final_name: str, fold: int = 0) -> list[dict]:
     """Three fold-0 tiles (clean, one finding, several): the reference caption, the first cycle's caption and the final one."""
     v1 = {r["row"]: r for r in rows(runs / "archive" / "v1" / "blip-lora" / f"f{fold}.jsonl") if r["family"] == "caption"}
-    final = {r["row"]: r for r in rows(runs / "blip-lora" / f"f{fold}.jsonl") if r["family"] == "caption"}
+    final = {r["row"]: r for r in rows(runs / final_name / f"f{fold}.jsonl") if r["family"] == "caption"}
     src = final or v1
     clean = lambda ref: ref.lower().startswith("no anomalies")
     kinds = (("clean", clean), ("one finding", lambda ref: not clean(ref) and "," not in ref), ("several findings", lambda ref: "," in ref))
@@ -174,7 +225,7 @@ def latex_captions(t: list[dict]) -> str:
     return tabular("l" + "p{0.29\\textwidth}" * 3, "Tile & Reference & First cycle & Final", body)
 
 
-def table_location_split(runs: Path, names=("archive/v1/blip-lora", "blip-lora", "balanced")) -> dict:
+def table_location_split(runs: Path, names: tuple) -> dict:
     """Location accuracy on fold-0 items whose truth is "throughout" and on the localised ones, per model."""
     out = {}
     for name in names:
@@ -186,7 +237,7 @@ def table_location_split(runs: Path, names=("archive/v1/blip-lora", "blip-lora",
     return out
 
 
-def table_hedging(runs: Path, names=("baseline", "blip-lora", "served-rgb-eval", "served-ndvi-eval", "dora")) -> list[dict]:
+def table_hedging(runs: Path, names: tuple) -> list[dict]:
     """Table 4 and the calibration figures: hedge rates, partial credit, ECE, AURC (fold 0)."""
     out = []
     for name in names:
@@ -233,7 +284,7 @@ def table_leakage(runs: Path) -> dict:
     return out
 
 
-def table_hedge_rule(runs: Path, name: str = "blip-lora", deltas=(0.0, 0.05, 0.1, 0.2, 0.3, 0.4)) -> list[dict]:
+def table_hedge_rule(runs: Path, name: str, deltas=(0.0, 0.05, 0.1, 0.2, 0.3, 0.4)) -> list[dict]:
     """Table 4b: hedging from the ranked readout's likelihood margin, swept over the margin (fold 0)."""
     rs = [r for r in rows(runs / name / "f0.jsonl") if r["family"] != "caption" and r.get("ranked2") is not None]
     if not rs:
@@ -262,43 +313,71 @@ def gpu_minutes(run: Path) -> float:
 COST_GROUPS = (("BLIP VQA LoRA, 5 folds", ["blip-vqa-f[0-4]"]), ("BLIP caption LoRA, 5 folds", ["blip-caption-f[0-4]"]),
                ("BLIP sweeps, 20 trials", ["sweep-vqa/*", "sweep-caption/*"]), ("Leakage model (official split)", ["leak-vqa-official"]),
                ("BLIP VQA DoRA, fold 0", ["blip-vqa-f0-dora"]), ("Served bake-off, 4 runs", ["bakeoff/*"]),
-               ("Qwen3.5-2B LoRA, RGB", ["served-rgb", "served-rgb-c*"]), ("Qwen3.5-2B LoRA, RGB + NDVI", ["served-ndvi", "served-ndvi-c*"]))
+               ("Qwen3.5-2B LoRA, RGB", ["served-rgb", "served-rgb-c*"]), ("Qwen3.5-2B LoRA, RGB + NDVI", ["served-ndvi", "served-ndvi-c*"]),
+               ("BLIP study, fold 0", ["study-vqa/*", "study-caption/*"]),
+               *((f"BLIP VQA cycle {c}, {p // 1000:,}k pairs", [f"c{c}-vqa-f[0-4]"]) for _, c, p in CYCLES[1:]),
+               ("BLIP caption LoRA, 480k pairs", ["c4-caption-f[0-4]"]))
+
+
+def gpu_name(run: Path) -> str:
+    """The GPU a finished run trained on, as its done record names it."""
+    name = json.loads((run / "done.json").read_text()).get("gpu", "") if (run / "done.json").exists() else ""
+    return "RTX PRO 5000" if "PRO 5000" in name else "T4" if "T4" in name else name or "T4"
 
 
 def table_cost(runs: Path) -> list[dict]:
-    """Table 7: trainable parameters and T4 GPU-hours per group of training runs, from their configs and logs."""
+    """Table 7: trainable parameters and GPU-hours per group of training runs, from their configs and logs."""
     out = []
     for label, patterns in COST_GROUPS:
         dirs = [d for p in patterns for d in sorted(runs.glob(p)) if (d / "metrics.jsonl").exists()]
         if not dirs:
             continue
         trainable = {json.loads((d / "config.json").read_text()).get("trainable") for d in dirs if (d / "config.json").exists()}
+        gpus = {gpu_name(d) for d in dirs}
         out.append({"group": label, "runs": len(dirs), "trainable": trainable.pop() if len(trainable) == 1 else None,
-                    "gpu_hours": sum(gpu_minutes(d) for d in dirs) / 60})
+                    "gpu": " / ".join(sorted(gpus)), "gpu_hours": sum(gpu_minutes(d) for d in dirs) / 60})
     return out
 
 
 def latex_cost(t7: list[dict]) -> str:
-    body = [" & ".join([r["group"], str(r["runs"]), f"{r['trainable'] / 1e6:.1f}" if r["trainable"] else "--", f"{r['gpu_hours']:.1f}"]) for r in t7]
-    return tabular("lrrr", "Runs & Count & Trainable params (M) & T4 GPU-hours", body)
+    body = [" & ".join([r["group"], str(r["runs"]), f"{r['trainable'] / 1e6:.1f}" if r["trainable"] else "--", r["gpu"],
+                        f"{r['gpu_hours']:.1f}"]) for r in t7]
+    return tabular("lrrlr", "Runs & Count & Trainable params (M) & GPU & GPU-hours", body)
 
 
-def table_pointing(runs: Path) -> dict:
-    """The pointing game: baseline vs BLIP-LoRA hit rate and heat-in-mask energy, with chance."""
-    p = runs / "heatmaps" / "pointing.json"
+def latex_cycles(t: list[dict]) -> str:
+    """The length table: per cycle, the selection score, held-out ranked and greedy four-question means, partial credit
+    and the paired change from the cycle before."""
+    body = []
+    for r in t:
+        ch = r["change"]
+        change = "--" if ch is None else f"{100 * ch[0]:+.1f} [{100 * ch[1]:+.1f}, {100 * ch[2]:+.1f}], {ch[3]}/5"
+        body.append(" & ".join([str(r["cycle"]), f"{r['pairs'] // 1000:,}k", fmt(r["val"]) if r["val"] else "--",
+                                fmt(*r["ranked"]), change, fmt(*r["greedy"]), fmt(*r["partial"])]))
+    head = "Cycle & Pairs & Validation & Held out, ranked & Change [95\\% CI], folds up & Held out, greedy & Partial credit"
+    return tabular("crcccc" + "c", head, body)
+
+
+def table_pointing(runs: Path, cycle: int) -> dict:
+    """The pointing game: baseline vs the chosen cycle's fold-0 VQA adapter, hit rate and heat-in-mask energy, with chance."""
+    p = runs / f"heatmaps-c{cycle}" / "pointing.json"
     return json.loads(p.read_text())["summary"] if p.exists() else {}
 
 
 FOLD0_MACROS = (("Qwen3.5-2B LoRA, RGB", "qwenRgb"), ("Qwen3.5-2B LoRA, RGB + NDVI", "qwenNdvi"), ("BLIP-LoRA", "blipFold"),
-                ("BLIP-LoRA v1", "voneFold"), ("BLIP-LoRA, balanced location draws", "balanced"), ("BLIP-DoRA v1", "dora"))
+                ("BLIP-LoRA v1", "voneFold"), ("BLIP-LoRA v2", "vtwoFold"), ("BLIP-LoRA v2, balanced location draws", "balanced"),
+                ("BLIP-DoRA v1", "dora"))
 # Every macro the report and the deck may quote: one without a record yet prints ?? instead of breaking the build.
-MACROS = tuple("""blipMean blipMeanStd blipFactF blipFactFStd blipPresence blipIdentify blipExtent blipLocation blipRanked
-    zeroMean zeroPresence zeroIdentify voneMean voneMeanStd voneFactF vonePresence voneIdentify voneExtent voneLocation
+# Five-fold "Mean" macros are the ranked readout, chosen on validation; "Greedy" ones are the generated answers.
+MACROS = tuple("""blipMean blipMeanStd blipGreedy blipGreedyStd blipPartial blipFactF blipFactFStd blipPresence blipIdentify
+    blipExtent blipLocation blipRanked zeroMean zeroGreedy zeroPresence zeroIdentify voneMean voneMeanStd voneGreedy voneFactF
+    vonePresence voneIdentify voneExtent voneLocation vtwoMean vtwoMeanStd vtwoGreedy vtwoFactF
+    finalCycle finalPairs finalVal prevVal finalChange finalChangeLo finalChangeHi finalChangeFolds totalChange totalChangeLo totalChangeHi
     constMean constLocation constIdentify blipAccEighty blipAurc blipCreditAmb blipAccClear blipEce blipAccAll zeroAurc
     blipParaphraseDrop blipJpegDrop blipBlurDrop voneParaphraseDrop voneJpegDrop servedRgbParaphraseDrop servedNdviParaphraseDrop
     leakGap leakLo leakHi leakSeen leakUnseen ndviDiff ndviLo ndviHi qwenZeroLenient pointZero pointLora pointChance energyZero energyLora
-    voneLocThroughout voneLocLocalised blipLocThroughout blipLocLocalised balLocThroughout balLocLocalised locNThroughout locNLocalised
-    balLocDrop referenceWords blipFoldWords voneFoldWords""".split()) + tuple(
+    voneLocThroughout voneLocLocalised vtwoLocThroughout vtwoLocLocalised blipLocThroughout blipLocLocalised balLocThroughout
+    balLocLocalised locNThroughout locNLocalised balLocDrop referenceWords blipFoldWords voneFoldWords""".split()) + tuple(
     name + s for _, name in FOLD0_MACROS for s in ("Mean", "Pooled", "Presence", "Location", "FactF", "Precision", "Recall", "Diff")
     if name != "blipFold" or s != "Diff")
 
@@ -311,25 +390,34 @@ def latex_numbers(res: dict) -> str:
     abl = {r["model"]: r for r in res["ablation"]}
     f0 = {r["model"]: r for r in res["fold0"]}
     hed = {r["model"]: r for r in res["hedging"]}
-    rob = res["robustness"].get("robust-blip-lora", {})
+    rob = res["robustness"].get(f"robust-c{res['chosen']}", {})
     n = {}
+    for label, k in (("BLIP-LoRA", "blip"), ("Zero-shot BLIP", "zero"), ("BLIP-LoRA v1", "vone"), ("BLIP-LoRA v2", "vtwo")):
+        if label in abl:
+            b = abl[label]
+            n.update({k + "Mean": pct(b["mean_ranked"][0]), k + "MeanStd": pct(b["mean_ranked"][1]), k + "Greedy": pct(b["mean"][0]),
+                      k + "GreedyStd": pct(b["mean"][1]), k + "FactF": pct(b["fact_f1"][0]), k + "FactFStd": pct(b["fact_f1"][1]),
+                      **{k + f.capitalize(): pct(b[f + "_ranked"][0]) for f in FAMILIES}})
     if "BLIP-LoRA" in abl:
-        b = abl["BLIP-LoRA"]
-        n.update(blipMean=pct(b["mean"][0]), blipMeanStd=pct(b["mean"][1]), blipFactF=pct(b["fact_f1"][0]),
-                 blipFactFStd=pct(b["fact_f1"][1]), blipPresence=pct(b["presence"][0]), blipIdentify=pct(b["identify"][0]),
-                 blipExtent=pct(b["extent"][0]), blipLocation=pct(b["location"][0]), blipRanked=pct(b["mean_ranked"][0]))
-    if "Zero-shot BLIP" in abl:
-        z = abl["Zero-shot BLIP"]
-        n.update(zeroMean=pct(z["mean"][0]), zeroPresence=pct(z["presence"][0]), zeroIdentify=pct(z["identify"][0]))
-    if "BLIP-LoRA v1" in abl:
-        v = abl["BLIP-LoRA v1"]
-        n.update(voneMean=pct(v["mean"][0]), voneMeanStd=pct(v["mean"][1]), voneFactF=pct(v["fact_f1"][0]), vonePresence=pct(v["presence"][0]),
-                 voneIdentify=pct(v["identify"][0]), voneExtent=pct(v["extent"][0]), voneLocation=pct(v["location"][0]))
+        n["blipRanked"] = n["blipMean"]
+    cyc = {r["cycle"]: r for r in res["cycles"]}
+    if res["chosen"] in cyc:
+        r, first = cyc[res["chosen"]], res["cycles"][0]
+        n.update(finalCycle=str(r["cycle"]), finalPairs=f"{r['pairs'] // 1000:,}k", finalVal=pct(r["val"]), blipPartial=pct(r["partial"][0]))
+        if r["change"]:
+            n.update(finalChange=pct(r["change"][0]), finalChangeLo=pct(r["change"][1]), finalChangeHi=pct(r["change"][2]),
+                     finalChangeFolds=str(r["change"][3]))
+            prev = cyc.get(r["cycle"] - 1)
+            if prev and prev["val"]:
+                n["prevVal"] = pct(prev["val"])
+        d = np.array(res["cycle_folds"][r["cycle"]]) - np.array(res["cycle_folds"][first["cycle"]])
+        h = T95[len(d) - 1] * d.std(ddof=1) / np.sqrt(len(d))
+        n.update(totalChange=pct(d.mean()), totalChangeLo=pct(d.mean() - h), totalChangeHi=pct(d.mean() + h))
     if res.get("constant"):
         c = res["constant"]
         n.update(constMean=pct(c["mean"][0]), constLocation=pct(c["location"][0]), constIdentify=pct(c["identify"][0]))
-    if "blip-lora" in hed:
-        h = hed["blip-lora"]
+    if res["final"] in hed:
+        h = hed[res["final"]]
         n.update(blipAccEighty=pct(h["acc_at_80"]), blipAurc=f"{h['aurc']:.2f}", blipCreditAmb=pct(h["credit_amb"]),
                  blipAccClear=pct(h["acc_clear"]), blipEce=f"{h['ece']:.2f}", blipAccAll=pct(h["acc_all"]))
     if "baseline" in hed:
@@ -365,13 +453,13 @@ def latex_numbers(res: dict) -> str:
             n[name + "ParaphraseDrop"] = pct(-r["paraphrase"])
         if "jpeg-10" in r:
             n[name + "JpegDrop"] = pct(-r["jpeg-10"])
-    for key, name in (("archive/v1/blip-lora", "voneLoc"), ("blip-lora", "blipLoc"), ("balanced", "balLoc")):
+    for key, name in (("archive/v1/blip-lora", "voneLoc"), ("blip-lora", "vtwoLoc"), (res["final"], "blipLoc"), ("balanced", "balLoc")):
         s = res.get("location_split", {}).get(key)
         if s:
             n.update({name + "Throughout": pct(s["throughout"]), name + "Localised": pct(s["localised"]),
                       "locNThroughout": f"{s['n_throughout']:,}", "locNLocalised": f"{s['n_localised']:,}"})
-    if "BLIP-LoRA" in f0 and "BLIP-LoRA, balanced location draws" in f0:
-        n["balLocDrop"] = pct(f0["BLIP-LoRA"]["by_family"]["location"] - f0["BLIP-LoRA, balanced location draws"]["by_family"]["location"])
+    if "BLIP-LoRA v2" in f0 and "BLIP-LoRA v2, balanced location draws" in f0:
+        n["balLocDrop"] = pct(f0["BLIP-LoRA v2"]["by_family"]["location"] - f0["BLIP-LoRA v2, balanced location draws"]["by_family"]["location"])
     if "Qwen3.5-2B, zero-shot" in f0:
         n["qwenZeroLenient"] = pct(np.mean([f0["Qwen3.5-2B, zero-shot"]["by_family_lenient"][f] for f in FAMILIES]))
     if res.get("pointing"):
@@ -403,7 +491,7 @@ def latex_ablation(t1: list[dict], const: dict) -> str:
     """Table 1: Baseline, the constant-answer floor and BLIP-LoRA over 5 folds."""
     body = []
     for r in t1:
-        fam = [f"{fmt(*r[f])} ({fmt(r[f + '_ranked'][0])})" for f in FAMILIES] + [f"{fmt(*r['mean'])} ({fmt(r['mean_ranked'][0])})"]
+        fam = [f"{fmt(*r[f + '_ranked'])} ({fmt(r[f][0])})" for f in FAMILIES] + [f"{fmt(*r['mean_ranked'])} ({fmt(r['mean'][0])})"]
         cider = f"{r['cider'][0]:.2f}"
         body.append(" & ".join([r["model"], *fam, fmt(*r["bleu4"]), fmt(*r["rougeL"]), cider, fmt(*r["fact_f1"])]))
         if r["model"] == "Zero-shot BLIP" and const:
@@ -430,8 +518,8 @@ def latex_fold0(t3: list[dict]) -> str:
     return tabular("l" + "c" * 8, head, body)
 
 
-def latex_hedging(t4: list[dict]) -> str:
-    labels = dict(FOLD0_ROWS)
+def latex_hedging(t4: list[dict], final: str) -> str:
+    labels = {name: label for name, label, _ in fold0_rows(final)}
     body = [" & ".join([labels.get(r["model"], r["model"]), f"{100 * r['hedge_amb']:.1f}", f"{100 * r['hedge_clear']:.1f}",
                         f"{100 * r['credit_amb']:.1f}", f"{100 * r['acc_clear']:.1f}", f"{r['ece']:.3f}", f"{r['aurc']:.3f}",
                         f"{100 * r['acc_at_80']:.1f}"]) for r in t4]
@@ -439,9 +527,9 @@ def latex_hedging(t4: list[dict]) -> str:
     return tabular("l" + "c" * 7, head, body)
 
 
-def latex_per_class(t2: dict) -> str:
-    names = [n for n in ("blip-lora", "served-rgb-eval", "served-ndvi-eval") if n in t2]
-    labels = {"blip-lora": "BLIP-LoRA", "served-rgb-eval": "Qwen, RGB", "served-ndvi-eval": "Qwen, RGB + NDVI"}
+def latex_per_class(t2: dict, final: str) -> str:
+    names = [n for n in (final, "served-rgb-eval", "served-ndvi-eval") if n in t2]
+    labels = {final: "BLIP-LoRA", "served-rgb-eval": "Qwen, RGB", "served-ndvi-eval": "Qwen, RGB + NDVI"}
     if not names:
         return tabular("l", "Class", ["\\textbf{??} no scored record yet"])
     body = []
@@ -467,16 +555,24 @@ def main():
     ap.add_argument("--out", type=Path, default=Path("report/tables"))
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
-    results = {"ablation": table_ablation(a.runs), "per_class": table_per_class(a.runs), "fold0": table_fold0(a.runs),
-               "hedging": table_hedging(a.runs), "hedge_rule": table_hedge_rule(a.runs), "robustness": table_robustness(a.runs),
-               "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs), "cost": table_cost(a.runs),
-               "sweep": sweep_scores(a.runs), "location_split": table_location_split(a.runs), "captions": table_caption_examples(a.runs)}
+    chosen = chosen_cycle(a.runs)
+    final = final_run(a.runs)
+    served = ("served-rgb-eval", "served-ndvi-eval")
+    results = {"chosen": chosen, "final": final, "cycles": table_cycles(a.runs),
+               "cycle_folds": {c: fold_means(a.runs, name) for name, c, _ in CYCLES},
+               "ablation": table_ablation(a.runs, final), "per_class": table_per_class(a.runs, ("baseline", final, *served)),
+               "fold0": table_fold0(a.runs, final), "hedging": table_hedging(a.runs, ("baseline", final, *served, "dora")),
+               "hedge_rule": table_hedge_rule(a.runs, final), "robustness": table_robustness(a.runs),
+               "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs, chosen), "cost": table_cost(a.runs),
+               "sweep": sweep_scores(a.runs), "captions": table_caption_examples(a.runs, final),
+               "location_split": table_location_split(a.runs, ("archive/v1/blip-lora", "blip-lora", final, "balanced"))}
     (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))
     results["constant"] = table_constant(a.runs)
     (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))
     (a.out / "numbers.tex").write_text(latex_numbers(results))
     for name, tex in (("ablation", latex_ablation(results["ablation"], results["constant"])), ("fold0", latex_fold0(results["fold0"])),
-                      ("hedging", latex_hedging(results["hedging"])), ("per_class", latex_per_class(results["per_class"])),
+                      ("hedging", latex_hedging(results["hedging"], final)), ("per_class", latex_per_class(results["per_class"], final)),
+                      ("cycles", latex_cycles(results["cycles"])),
                       ("leakage", latex_leakage(results["leakage"])), ("cost", latex_cost(results["cost"])),
                       ("captions", latex_captions(results["captions"]))):
         (a.out / f"{name}.tex").write_text(tex)

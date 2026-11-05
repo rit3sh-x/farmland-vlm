@@ -5,7 +5,8 @@ from its last pushed checkpoint.
     HF_TOKEN=... python scripts/pipeline.py --stats /content/stats.npz --root /content/av/Agriculture-Vision-2021
     python scripts/pipeline.py ... --only baseline sweep
 
-Stages: baseline sweep bakeoff blip robustness heatmaps leakage dora balanced study served export served-robustness.
+Stages: baseline sweep bakeoff blip robustness heatmaps leakage dora balanced study study2 captions4 cycle3-cycle6 final served
+export served-robustness.
 """
 import argparse
 import json
@@ -16,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from farmvlm import hub  # noqa: E402
+from farmvlm.report import chosen_cycle, final_run  # noqa: E402
 
 RUNS = hub.RUNS
 CODE = Path(__file__).resolve().parent.parent
@@ -263,6 +265,16 @@ def main():
         # Captions keep cycle 2's adapters: the study tuned VQA, the primary metric.
         evaluate(f"{c}-blip", a, "eval_blip.py", "--folds", *a.folds, "--vqa-adapter", RUNS / f"{c}-vqa-f{{fold}}" / "best",
                  "--caption-adapter", RUNS / "blip-caption-f{fold}" / "best", marker=f"f{a.folds[-1]}.json")
+    if want("final"):  # the cycle the validation rule chose, with the 480k caption adapters: robustness, heatmaps, held out
+        c = chosen_cycle(RUNS)
+        evaluate(f"robust-c{c}", a, "eval_blip.py", "--suite", "robustness", "--folds", 0, "--vqa-adapter", adapter(f"c{c}-vqa-f0"),
+                 "--caption-adapter", adapter("c4-caption-f0"), marker="f0-rot90-None.json")
+        if not fetch(f"heatmaps-c{c}", "pointing.json"):
+            sh(sys.executable, CODE / "scripts" / "heatmaps.py", "--stats", a.stats, "--root", a.root,
+               "--adapter", adapter(f"c{c}-vqa-f0"), "--out", RUNS / f"heatmaps-c{c}")
+            hub.push(RUNS / f"heatmaps-c{c}", f"heatmaps-c{c}")
+        evaluate(final_run(RUNS), a, "eval_blip.py", "--folds", *a.folds, "--vqa-adapter", RUNS / f"c{c}-vqa-f{{fold}}" / "best",
+                 "--caption-adapter", RUNS / "c4-caption-f{fold}" / "best", marker=f"f{a.folds[-1]}.json")
     if want("served"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
         extra = ["--vision"] if b["merged_route"] else []
