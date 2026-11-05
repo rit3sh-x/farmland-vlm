@@ -360,3 +360,10 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
   - the ranked readout, +1.3
   - twice the training length, +2.2
 - **The held-out learning curve so far:** 68.1 at 120k, 70.2 at 240k. Cycle 4 (480k) adds the next point; its choice over cycle 3 follows the rule fixed at 10:00.
+
+## 2026-11-05 14:05: captions get the length test too
+
+- **Cycle 2's caption run** (fold 0, 120k pairs, 300 validation tiles) rose from fact F1 72 at 15k–30k to about 83.5 at 95k–115k, and ended at 82.9. The 30k caption trials in the study stopped well short of that.
+- **Captions are a reported metric** (fact F1, BLEU, ROUGE, CIDEr), so they get the same length test as VQA.
+- **Probe:** `study-caption/pairs480k` trains on fold 0 in the freed slot. It is read against cycle 2's caption adapter on the same 1,000 validation tiles, where that adapter scores fact F1 78.3.
+- **If it gains,** the other folds follow, and captions are scored held out alongside the final VQA adapters.
