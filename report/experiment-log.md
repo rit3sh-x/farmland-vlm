@@ -385,3 +385,30 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
   | 4 | 66.0 | 67.5 |
 
   Cycle 4 leads on every fold.
+
+## 2026-11-05 15:25: cycle 4 chosen on validation, confirmed held out at 71.5
+
+- **The 10:00 rule, applied:** mean validation over the five folds is 68.2 for cycle 3 (66.0, 69.9, 69.3, 69.6, 66.0) and 69.5 for cycle 4 (67.8, 71.2, 69.7, 71.4, 67.5). **Cycle 4 replaces cycle 3.**
+- **Held out**, ranked readout, against cycle 3 (both computed after the choice):
+
+  | Fold | Cycle 3 | Cycle 4 | Change (95% CI, fields) | Fixed / broken |
+  |---|---|---|---|---|
+  | 0 | 71.3 | 72.6 | +1.2 [+0.6, +2.0] | 420 / 323 |
+  | 1 | 71.7 | 73.7 | +2.0 [+0.7, +3.3] | 532 / 341 |
+  | 2 | 68.9 | 69.9 | +1.0 [+0.2, +1.9] | 497 / 393 |
+  | 3 | 69.4 | 70.2 | +0.8 [+0.1, +1.4] | 512 / 464 |
+  | 4 | 69.7 | 71.2 | +1.6 [+0.7, +2.4] | 507 / 342 |
+  | **mean ± sd** | **70.2 ± 1.2** | **71.5 ± 1.6** | **+1.3 [+0.6, +2.0] over folds**, 5/5 up | |
+
+- **Against cycle 2:** +3.5 [+1.7, +5.2] over folds, 5/5 up.
+- **Partial credit:** 76.0 ± 1.5.
+- **Greedy readout:** 69.6 ± 1.5. That is +0.8 [−0.1, +1.7] over cycle 3, 4/5 folds up. The ranked readout gains more from longer training than greedy does.
+- **The held-out learning curve** (ranked, five folds):
+
+  | Pairs | 120k (cycle 2) | 240k (cycle 3) | 480k (cycle 4) |
+  |---|---|---|---|
+  | Held out | 68.1 | 70.2 | 71.5 |
+
+  Each doubling still pays (+2.1, then +1.3), less each time. Validation predicted every step's direction.
+- **The primary metric** stands at **71.5**, against 66.8 when cycle 2 was first reported. Every change was chosen on validation.
+- **Captions** are still cycle 2's adapters (fact F1 76.8). The 480k caption probe reads fact F1 77.4 at 160k.
