@@ -245,6 +245,13 @@ def main():
         # Decoding needs no training: the cycle-2 fold-0 adapters with beam search, against blip-lora/f0 (greedy)
         evaluate("study-decode-beams3", a, "eval_blip.py", "--folds", 0, "--beams", 3, "--vqa-adapter", adapter("blip-vqa-f0"),
                  "--caption-adapter", adapter("blip-caption-f0"), marker="f0.json")
+    # Captions at 480k pairs: fold 0's probe (study-caption/pairs480k, copied to c4-caption-f0: training is deterministic
+    # and validation never touches the weights) gained fact F1 +2.8 (81.1 against 78.3), BLEU-4 0.579 -> 0.591 and
+    # ROUGE-L 0.742 -> 0.760 over cycle 2's caption adapter on the same validation tiles.
+    if want("captions4"):
+        for f in a.folds:
+            train_blip(f"c4-caption-f{f}", a, "caption", fold=f, **CYCLE4, eval_every=80_000, val_tiles=STUDY_VAL_TILES,
+                       val_protocol="test", patience=99)
     for c, recipe in (("c3", CYCLE3), ("c4", CYCLE4), ("c5", CYCLE5)):
         if not want(f"cycle{c[1]}"):
             continue
