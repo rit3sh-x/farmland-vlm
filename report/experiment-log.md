@@ -412,3 +412,21 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
   Each doubling still pays (+2.1, then +1.3), less each time. Validation predicted every step's direction.
 - **The primary metric** stands at **71.5**, against 66.8 when cycle 2 was first reported. Every change was chosen on validation.
 - **Captions** are still cycle 2's adapters (fact F1 76.8). The 480k caption probe reads fact F1 77.4 at 160k.
+
+## 2026-11-05 18:30: 960k leads on fold 0; captions move to 480k
+
+- **Cycle 5 fold 0** (960k pairs) validates at **70.7** against cycle 4's 67.8, +2.9. Its checks were 63.0, 63.8, 67.6, 67.9, 70.6 and 70.7, so it still rose through the final anneal. Folds 1–4 are training, and the adoption rule is unchanged: five-fold mean validation.
+- **The caption probe** (fold 0, 480k pairs) against cycle 2's caption adapter (120k), on the same 1,000 validation tiles and through the same evaluator:
+
+  | | 120k (cycle 2) | 480k |
+  |---|---|---|
+  | Fact F1 | 78.3 | **81.1** |
+  | BLEU-1 | 0.780 | 0.781 |
+  | BLEU-4 | 0.579 | 0.591 |
+  | ROUGE-L | 0.742 | 0.760 |
+  | CIDEr | 3.34 | 3.75 |
+
+- **Decision:** captions train at 480k pairs on every fold.
+  - **Fold 0 is the probe itself,** copied to `c4-caption-f0`. Training is deterministic and validation never touches the weights, so retraining it would reproduce the same adapter. Its `config.json` still records the random-protocol validation it was checked on.
+  - **Folds 1–4** check on the test-protocol draw, and queue behind cycle 5's folds 1 and 2 to keep the shared card under about 40 GB.
+- **Captions are scored held out** together with whichever VQA cycle the validation rule picks.
