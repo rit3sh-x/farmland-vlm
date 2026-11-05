@@ -482,3 +482,10 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
 - **The final record** is `c{chosen}-capc4-blip`: the chosen cycle's VQA adapters with the 480k caption adapters. The report's headline macros now quote the ranked readout, the one chosen on validation. Greedy numbers are kept beside them as `*Greedy`. Fold standard deviations now use n−1, matching this log.
 - **New cycles table and length-curve figure.** The table's fold-paired intervals come straight from the per-fold scores in `f*.json`, e.g. cycle 5 over 4 is +1.6 [+0.8, +2.3]. The 03:10 entry's [+0.7, +2.4] came from `compare_runs`' per-fold paired estimates. The two differ only in the interval's last digit.
 - **Queued:** a `final` pipeline stage (`pipeline-9`, which starts when the caption fold-4 run exits). It scores robustness and the pointing game for the chosen cycle's fold-0 adapter, then completes the held-out record on folds 2 and 4 and pushes all three to the Hub.
+
+## 2026-11-06 03:55: cycle 6's other folds start early
+
+- **Change to the probe gate, not to the selection rule.** Training fold 0 first was a compute gate. It was never part of the selection rule, which still picks on five-fold validation.
+  - Waiting for fold 0 (about 15 more hours at 25 pairs/s while three runs share the GPU) would leave most of the GPU idle once the captions finish.
+  - Folds 1–3 (`pipeline-11..13`) start when the final stage exits. Fold 4 (`pipeline-14`) starts when fold 0's run exits. Four runs at about 9 GB each stay under 40 GB.
+- **Stop signal kept.** If fold 0's best second-half validation ends at or below cycle 5's 70.7, the other cycle-6 runs are stopped and cycle 5 stays final.
