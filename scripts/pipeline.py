@@ -66,6 +66,8 @@ CYCLE4 = {**STUDY_REF, "pairs": 480_000}
 # Cycle 5 probe: 960k pairs on fold 0 first. Doubling compute through length paid +1.9 at 240k -> 480k (fold 0), against
 # +0.8 for averaging two seeds of one length; the other folds follow only if fold 0's validation rises again.
 CYCLE5 = {**STUDY_REF, "pairs": 960_000}
+# Cycle 6 probe: 1.92M pairs on fold 0. Cycle 5 led cycle 4 on every fold's validation (fold 0: 70.7 against 67.8).
+CYCLE6 = {**STUDY_REF, "pairs": 1_920_000}
 SERVED_PAIRS = 30_000  # per cycle: Qwen3.5-2B trains at ~146 min per 10k pairs on a T4
 # Cycle 2 restarts the cosine schedule from cycle 1's best adapter (its validation was still rising at 30k pairs).
 SERVED_CYCLES = 2
@@ -252,7 +254,7 @@ def main():
         for f in a.folds:
             train_blip(f"c4-caption-f{f}", a, "caption", fold=f, **CYCLE4, eval_every=80_000, val_tiles=STUDY_VAL_TILES,
                        val_protocol="test", patience=99)
-    for c, recipe in (("c3", CYCLE3), ("c4", CYCLE4), ("c5", CYCLE5)):
+    for c, recipe in (("c3", CYCLE3), ("c4", CYCLE4), ("c5", CYCLE5), ("c6", CYCLE6)):
         if not want(f"cycle{c[1]}"):
             continue
         for f in a.folds:
