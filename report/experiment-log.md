@@ -339,3 +339,24 @@ Fold 0 test-protocol validation, ranked readout. Averaging means each candidate'
 - **Averaging cycles 3 and 4 hurts.** They share a seed, so their errors overlap, and the weaker model dilutes the stronger.
 - **Two equally strong seeds gain +0.8** over what one run is expected to score, at twice the training and inference cost. Spending the same doubling on length gave +1.9 (240k to 480k, fold 0).
 - **Decision:** no ensembles. Extra compute goes to length. A 960k-pair probe on fold 0 (`c5-vqa-f0`) tests whether the curve still rises before the other folds are trained.
+
+## 2026-11-05 11:00: cycle 3 held out on five folds, +2.2 over cycle 2
+
+Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold's held-out test sample. Paired item by item within each fold. The interval over folds is a t interval on the five fold changes, so it carries training-seed noise as well as item sampling.
+
+| Fold | Cycle 2, ranked | Cycle 3, ranked | Change (95% CI, fields) | Fixed / broken |
+|---|---|---|---|---|
+| 0 | 68.8 | 71.3 | +2.5 [+1.7, +3.3] | 529 / 275 |
+| 1 | 69.3 | 71.7 | +2.5 [+1.7, +3.3] | 561 / 340 |
+| 2 | 66.9 | 68.9 | +2.1 [+1.2, +2.8] | 588 / 385 |
+| 3 | 68.6 | 69.4 | +0.8 [+0.0, +1.6] | 521 / 439 |
+| 4 | 66.7 | 69.7 | +3.0 [+1.5, +4.3] | 635 / 347 |
+| **mean ± sd** | **68.1 ± 1.2** | **70.2 ± 1.2** | **+2.2 [+1.0, +3.3] over folds**, 5/5 up | |
+
+- **Partial credit:** 72.7 to 74.7. **Greedy readout:** 66.8 to 68.8, +2.0 [+0.4, +3.6], also 5/5.
+- **Captions:** fact F1 76.8 for both. Cycle 3 reuses cycle 2's caption adapters, so this is a consistency check.
+- **Validation predicted the direction, and held-out gained more:** +1.2 on fold-0 validation became +2.2 held out.
+- **Since cycle 2's original report** (greedy, 66.8), the primary metric has risen 3.4 points to **70.2**. Two changes did it, both chosen on validation:
+  - the ranked readout, +1.3
+  - twice the training length, +2.2
+- **The held-out learning curve so far:** 68.1 at 120k, 70.2 at 240k. Cycle 4 (480k) adds the next point; its choice over cycle 3 follows the rule fixed at 10:00.
