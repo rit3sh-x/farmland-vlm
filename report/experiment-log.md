@@ -367,3 +367,21 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
 - **Captions are a reported metric** (fact F1, BLEU, ROUGE, CIDEr), so they get the same length test as VQA.
 - **Probe:** `study-caption/pairs480k` trains on fold 0 in the freed slot. It is read against cycle 2's caption adapter on the same 1,000 validation tiles, where that adapter scores fact F1 78.3.
 - **If it gains,** the other folds follow, and captions are scored held out alongside the final VQA adapters.
+
+## 2026-11-05 14:45: the 960k probe matches cycle 4 at its midpoint; cycle 5 widens
+
+- **The 960k probe's fold-0 checks** (test-protocol validation, ranked): 63.0, 63.8 and 67.6 at 160k, 320k and 480k. At 480k, with its LR still at half, it already matches cycle 4's final 67.8.
+  - Cycle 4 at its own midpoint (240k) was 65.4, below cycle 3's final 66.0, and it finished 1.8 above it.
+  - **Decision:** start 960k on folds 1 and 2 now instead of waiting about 6 hours for fold 0 to finish. Folds 3 and 4 follow as slots free.
+  - The adoption rule is the same as for cycle 4: cycle 5 replaces cycle 4 only if its five-fold mean validation is higher. The held-out folds do not choose.
+- **Cycle 4 validation so far, against cycle 3:**
+
+  | Fold | Cycle 3 | Cycle 4 |
+  |---|---|---|
+  | 0 | 66.0 | 67.8 |
+  | 1 | 69.9 | 71.2 |
+  | 2 | 69.3 | 69.7 |
+  | 3 | 69.6 | 71.4 (best so far, 80k pairs left) |
+  | 4 | 66.0 | 67.5 |
+
+  Cycle 4 leads on every fold.
