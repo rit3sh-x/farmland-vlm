@@ -114,3 +114,23 @@ class BlipReader:
                                 num_beams=self.beams)
         text = self.cap_proc.batch_decode(out.sequences, skip_special_tokens=True)
         return list(zip([t.strip() for t in text], self._conf(out)))
+
+
+class Ensemble:
+    """The ranked readout of several VQA readers trained on the same data: each candidate's log-probability is averaged
+    over the readers. Generated answers and captions come from the first reader."""
+
+    def __init__(self, readers):
+        self.readers, self.first = readers, readers[0]
+
+    def answer(self, *a, **k):
+        return self.first.answer(*a, **k)
+
+    def caption(self, *a, **k):
+        return self.first.caption(*a, **k)
+
+    def scores(self, images, questions, candidates):
+        per = [r.scores(images, questions, candidates) for r in self.readers]
+        return [torch.stack(x).mean(0).log_softmax(0) for x in zip(*per)]
+
+    rank = BlipReader.rank

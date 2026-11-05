@@ -66,6 +66,8 @@ def main():
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--vqa-adapter", help="path, may contain {fold}")
     ap.add_argument("--caption-adapter", help="path, may contain {fold}")
+    ap.add_argument("--also-vqa-adapter", nargs="*", default=[],
+                    help="more VQA adapters (may contain {fold}) whose ranked scores are averaged with --vqa-adapter's")
     ap.add_argument("--suite", choices=["clean", "robustness", "leakage", "validation"], default="clean",
                     help="validation: the fold's inner-validation items (train_blip's split and draw), where readouts are chosen")
     ap.add_argument("--val-tiles", type=int, default=1000)
@@ -113,6 +115,9 @@ def main():
     for f in a.folds:
         fmt = lambda p: p.format(fold=f) if p else None
         reader = load_reader(fmt(a.vqa_adapter), fmt(a.caption_adapter), a.beams, rec)
+        if a.also_vqa_adapter:
+            from farmvlm.blip import Ensemble
+            reader = Ensemble([reader] + [load_reader(fmt(v), None, a.beams, rec) for v in a.also_vqa_adapter])
         if a.suite == "validation":
             from farmvlm.train_blip import validation_items
             run(reader, validation_items(t, "folds", f, a.seed, a.val_tiles, a.val_protocol), f"val-f{f}", ranked=True)
