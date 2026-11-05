@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 PY=${PY:-.venv/bin/python}
 $PY scripts/mirror.py
 $PY -m farmvlm.report
+$PY scripts/study_table.py --out report/tables/study.tex
 $PY scripts/figures.py
 cd report && tectonic -X compile main.tex && tectonic -X compile deck.tex
 grep -c "providecommand" tables/numbers.tex | xargs -I{} echo "{} macros still without a record (printed as ??)"; grep -c "pending{" main.tex | xargs -I{} echo "{} pending notes in main.tex"

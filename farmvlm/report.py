@@ -222,7 +222,7 @@ def latex_captions(t: list[dict]) -> str:
     """The caption examples: one row per tile, reference beside the first cycle's and the final caption."""
     esc = lambda x: "\\textbf{??}" if x is None else x.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
     body = [" & ".join([r["kind"].capitalize(), esc(r["reference"]), esc(r["v1"]), esc(r["final"])]) for r in t]
-    return tabular("l" + "p{0.29\\textwidth}" * 3, "Tile & Reference & First cycle & Final", body)
+    return tabular("l" + "p{0.26\\textwidth}" * 3, "Tile & Reference & First cycle & Final", body)
 
 
 def table_location_split(runs: Path, names: tuple) -> dict:
@@ -320,9 +320,10 @@ COST_GROUPS = (("BLIP VQA LoRA, 5 folds", ["blip-vqa-f[0-4]"]), ("BLIP caption L
 
 
 def gpu_name(run: Path) -> str:
-    """The GPU a finished run trained on, as its done record names it."""
-    name = json.loads((run / "done.json").read_text()).get("gpu", "") if (run / "done.json").exists() else ""
-    return "RTX PRO 5000" if "PRO 5000" in name else "T4" if "T4" in name else name or "T4"
+    """The GPU a run trained on, as its config or done record names it; runs from before either recorded it trained on
+    free Colab and Kaggle T4s."""
+    name = " ".join(json.loads((run / f).read_text()).get("gpu") or "" for f in ("config.json", "done.json") if (run / f).exists())
+    return "RTX PRO 5000" if "PRO 5000" in name else "T4"
 
 
 def table_cost(runs: Path) -> list[dict]:
@@ -337,6 +338,15 @@ def table_cost(runs: Path) -> list[dict]:
         out.append({"group": label, "runs": len(dirs), "trainable": trainable.pop() if len(trainable) == 1 else None,
                     "gpu": " / ".join(sorted(gpus)), "gpu_hours": sum(gpu_minutes(d) for d in dirs) / 60})
     return out
+
+
+def hours_by_gpu(runs: Path) -> dict:
+    """Training and validation GPU-hours of every costed run, per GPU model."""
+    dirs = {d for _, patterns in COST_GROUPS for p in patterns for d in runs.glob(p) if (d / "metrics.jsonl").exists()}
+    out = defaultdict(float)
+    for d in dirs:
+        out[gpu_name(d)] += gpu_minutes(d) / 60
+    return dict(out)
 
 
 def latex_cost(t7: list[dict]) -> str:
@@ -372,7 +382,7 @@ FOLD0_MACROS = (("Qwen3.5-2B LoRA, RGB", "qwenRgb"), ("Qwen3.5-2B LoRA, RGB + ND
 MACROS = tuple("""blipMean blipMeanStd blipGreedy blipGreedyStd blipPartial blipFactF blipFactFStd blipPresence blipIdentify
     blipExtent blipLocation blipRanked zeroMean zeroGreedy zeroPresence zeroIdentify voneMean voneMeanStd voneGreedy voneFactF
     vonePresence voneIdentify voneExtent voneLocation vtwoMean vtwoMeanStd vtwoGreedy vtwoFactF
-    finalCycle finalPairs finalVal prevVal finalChange finalChangeLo finalChangeHi finalChangeFolds totalChange totalChangeLo totalChangeHi
+    tfourHours proHours finalCycle finalPairs finalVal prevVal finalChange finalChangeLo finalChangeHi finalChangeFolds totalChange totalChangeLo totalChangeHi
     constMean constLocation constIdentify blipAccEighty blipAurc blipCreditAmb blipAccClear blipEce blipAccAll zeroAurc
     blipParaphraseDrop blipJpegDrop blipBlurDrop voneParaphraseDrop voneJpegDrop servedRgbParaphraseDrop servedNdviParaphraseDrop
     leakGap leakLo leakHi leakSeen leakUnseen ndviDiff ndviLo ndviHi qwenZeroLenient pointZero pointLora pointChance energyZero energyLora
@@ -413,6 +423,7 @@ def latex_numbers(res: dict) -> str:
         d = np.array(res["cycle_folds"][r["cycle"]]) - np.array(res["cycle_folds"][first["cycle"]])
         h = T95[len(d) - 1] * d.std(ddof=1) / np.sqrt(len(d))
         n.update(totalChange=pct(d.mean()), totalChangeLo=pct(d.mean() - h), totalChangeHi=pct(d.mean() + h))
+    n.update(tfourHours=f"{res['hours'].get('T4', 0):.0f}", proHours=f"{res['hours'].get('RTX PRO 5000', 0):.0f}")
     if res.get("constant"):
         c = res["constant"]
         n.update(constMean=pct(c["mean"][0]), constLocation=pct(c["location"][0]), constIdentify=pct(c["identify"][0]))
@@ -563,7 +574,7 @@ def main():
                "ablation": table_ablation(a.runs, final), "per_class": table_per_class(a.runs, ("baseline", final, *served)),
                "fold0": table_fold0(a.runs, final), "hedging": table_hedging(a.runs, ("baseline", final, *served, "dora")),
                "hedge_rule": table_hedge_rule(a.runs, final), "robustness": table_robustness(a.runs),
-               "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs, chosen), "cost": table_cost(a.runs),
+               "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs, chosen), "cost": table_cost(a.runs), "hours": hours_by_gpu(a.runs),
                "sweep": sweep_scores(a.runs), "captions": table_caption_examples(a.runs, final),
                "location_split": table_location_split(a.runs, ("archive/v1/blip-lora", "blip-lora", final, "balanced"))}
     (a.out / "results.json").write_text(json.dumps(results, indent=1, default=float))

@@ -78,13 +78,30 @@ def table(runs: Path, task: str) -> str:
     return "\n".join(lines)
 
 
+def latex(runs: Path) -> str:
+    """The VQA study for the report: one row per finished trial, shortest runs first. BLIP-large has no VQA checkpoint
+    of its own (its VQA weights duplicate the base model's), so that trial is left out."""
+    root, ref = runs / "study-vqa", runs / "study-vqa" / "ref"
+    found = [d for d in root.iterdir() if (d / "done.json").exists() and d.name != "large"]
+    rs = sorted((row(d, ref, "vqa") for d in found), key=lambda r: (r["pairs"], r["trial"] != "ref", r["trial"]))
+    sgn = lambda x: f"{x * 100:+.1f}".replace("-", "$-$")
+    body = []
+    for r in rs:
+        delta, lo, hi = r["delta"]
+        ci = "--" if r["trial"] == "ref" else f"{sgn(delta)} [{sgn(lo)}, {sgn(hi)}]"
+        change = "the reference recipe" if r["change"].startswith(("reference", "pairs=")) else r["change"]
+        change = change.replace("train_seed", "seed").replace("_", "\\_").replace("=", " ").replace("(vs pairs120k)", "(vs 120k)")
+        body.append(f"{r['pairs'] // 1000}k & {change} & {r['val'] * 100:.1f} & {ci} & {r['trainable_m']:.1f} \\\\")
+    return ("\\begin{tabular}{rlccc}\n\\toprule\nPairs & Change from the reference & Validation & $\\Delta$ [95\\% CI] "
+            "& Trainable (M) \\\\\n\\midrule\n" + "\n".join(body) + "\n\\bottomrule\n\\end{tabular}\n")
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=Path, default=Path("runs"))
     ap.add_argument("--task", choices=["vqa", "caption"], default="vqa")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
-    t = table(a.runs, a.task)
+    t = latex(a.runs) if a.out and a.out.suffix == ".tex" else table(a.runs, a.task)
     print(t)
     if a.out:
         a.out.write_text(t + "\n")
