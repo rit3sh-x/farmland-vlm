@@ -282,3 +282,26 @@ The finalists on fold 0's test-protocol validation draw (6,542 items):
 - **240k pairs stays ahead** on the draw that weighs rare classes as the held-out score does, so the cycle-3 choice stands.
 - **The ranked readout gains more here:** +2.0 at 120k, against +1.1 on the random draw. It helps rare classes most, where free generation more often produces an answer outside the set.
 - **Rank 256 at 120k** is again not distinguishable from rank 64.
+
+## 2026-11-05 05:50: the curve keeps rising at 480k; seed noise at length; cycle 4
+
+- **The learning curve,** best validation of each run:
+
+  | Pairs | 30k | 60k | 120k | 240k | 480k |
+  |---|---|---|---|---|---|
+  | Validation | 58.2 | 60.8 | 62.6 | 63.7 | 65.1 |
+
+  - 480k adds +1.4 over 240k, so the curve has not flattened.
+  - Its own checks (80k to 480k): 58.9, 57.8, 62.8, 63.5, 65.1, 64.8. The early dip comes at high LR, and the gain arrives as the schedule anneals.
+- **Seed noise at 120k pairs:** a second training seed scores 61.2 against 62.6, −1.4 [−3.0, +0.1]. Run-to-run noise does not shrink with length, staying around a point.
+- **all_linear at LR 2e-4, 120k pairs:** 63.4, +0.8 [−0.3, +1.8] over the 120k reference. That is within the seed spread just measured. **Decision:** not adopted. No knob beat length at length.
+- **Determinism, again:** cycle 3 fold 0 is the study's 240k run with the same seed, now checked with the ranked readout on the test-protocol draw. It reads 65.9 at 200k pairs, where the study run's 200k checkpoint, re-scored the same way, also read 65.9.
+- **Qwen3.5-2B on held-out fold 0** (generated readout):
+  - RGB 67.3, caption fact F1 64.9.
+  - NDVI 66.9, caption fact F1 65.5.
+  - NDVI's validation lead (69.7 against 67.3 on 75 tiles) does not hold out.
+  - BLIP-LoRA cycle 2 with the ranked readout scores 68.9 on the same fold.
+- **Cycle 4:**
+  - **Recipe:** the cycle-2 recipe at 480k pairs, checks every 80k with the ranked readout on the test-protocol draw.
+  - **Schedule:** folds 0 and 2 started now, and folds 3 and 4 follow cycle 3's folds in the same slots.
+  - **Why cycle 3 keeps running:** with it, the held-out folds give their own learning curve at 120k (cycle 2), 240k (cycle 3) and 480k (cycle 4). That tests whether validation's length gains carry over.
