@@ -305,3 +305,21 @@ The finalists on fold 0's test-protocol validation draw (6,542 items):
   - **Recipe:** the cycle-2 recipe at 480k pairs, checks every 80k with the ranked readout on the test-protocol draw.
   - **Schedule:** folds 0 and 2 started now, and folds 3 and 4 follow cycle 3's folds in the same slots.
   - **Why cycle 3 keeps running:** with it, the held-out folds give their own learning curve at 120k (cycle 2), 240k (cycle 3) and 480k (cycle 4). That tests whether validation's length gains carry over.
+
+## 2026-11-05 10:00: cycle 4 leads on validation; the choice rule, fixed before any held-out score
+
+- **Per-fold validation** (test-protocol draw, ranked readout, best check):
+
+  | Fold | Cycle 3 (240k) | Cycle 4 (480k) |
+  |---|---|---|
+  | 0 | 66.0 | 67.8 |
+  | 1 | 69.9 | running |
+  | 2 | running (68.0 at 160k) | 69.7 |
+  | 3 | 69.6 | queued |
+  | 4 | running (65.2 at 200k) | queued |
+
+- **Fold 0, paired:** cycle 4 against cycle 3 is +1.9 [+0.9, +2.9]. Identify +3.4, extent +2.6, location +1.6. 254 items fixed, 179 broken. Each side is one training run, and seed noise is about a point per run.
+- **Choice rule, written before any cycle-3 or cycle-4 held-out score exists:**
+  - Cycle 4 replaces cycle 3 as the final recipe if its mean validation over the five folds exceeds cycle 3's. Validation here means each fold's own test-protocol draw.
+  - Both cycles' held-out scores are reported, as the held-out learning curve at 120k, 240k and 480k.
+  - The held-out folds do not choose between them.
