@@ -443,3 +443,20 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
   The formal choice waits for fold 4 to finish.
 - **Each fold, from cycle 3 to 4 to 5,** has gained about 1.5 to 2 points of validation per doubling. Nothing has turned down yet, and a validation drop would be the sign of overfitting.
 - **Next probe:** 1.92M pairs (`c6-vqa-f0`) on fold 0, in the slot cycle 5 fold 3 freed. It takes about 18 hours on the shared card. The other folds follow only if fold 0's validation rises again, under the same five-fold rule.
+
+## 2026-11-06 03:10: cycle 5 chosen on validation; held out 73.1
+
+- **Rule outcome:** five-fold mean validation is 71.46 for cycle 5 against 69.51 for cycle 4 (cycle 3: 68.15). Cycle 5's fold 4 ended at 69.5. Cycle 5 replaces cycle 4. The held-out folds below were read after the choice and did not make it.
+- **Held out, five folds, ranked readout** (fold-paired change with a t interval over folds; per-fold intervals resample fields):
+
+  | Fold | 0 | 1 | 2 | 3 | 4 | Mean ± sd | Partial |
+  |---|---|---|---|---|---|---|---|
+  | Cycle 2 (120k) | 68.8 | 69.3 | 66.9 | 68.6 | 66.7 | 68.1 ± 1.2 | 72.7 |
+  | Cycle 4 (480k) | 72.6 | 73.7 | 69.9 | 70.2 | 71.2 | 71.5 ± 1.6 | 76.0 |
+  | **Cycle 5 (960k)** | **74.7** | **75.0** | **72.0** | **71.8** | **71.9** | **73.1 ± 1.6** | **77.5** |
+
+  - Against cycle 4: **+1.6 [+0.7, +2.4]**, 5/5 folds up. Fold 4 is the smallest gain, +0.7 [−0.1, +1.5].
+  - Against cycle 2: **+5.1 [+3.5, +6.6]**, 5/5 folds up.
+- **The greedy readout gains less:** 70.2 ± 1.1 against cycle 4's 69.6, +0.6 [−0.6, +1.8], 4/5 folds. Longer training mostly sharpens the answer likelihoods that ranking reads, more than it changes the first token greedy decoding commits to. Ranked is the chosen readout, so the headline is 73.1. Both are reported.
+- **Captions:** the 480k caption adapters of folds 0, 1 and 3 are being scored held out with cycle 5's VQA adapters (`c5-capc4-blip`). The VQA rows double as a determinism check against `c5-blip`. Folds 2 and 4 follow when they finish training.
+- **Cycle 6** (1.92M, fold 0) is at 176k pairs. The plan is unchanged: the other folds train only if its validation beats cycle 5's 70.7 on fold 0.
