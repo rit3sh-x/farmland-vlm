@@ -51,7 +51,10 @@ STUDY = [("ref", {}, BOTH), ("size512", {"size": 512}, BOTH), ("rank128", {"rank
 STUDY2 = [("ref-seed1", {"train_seed": 1}, VQA), ("ref-seed2", {"train_seed": 2}, VQA),
           ("rank256-pairs120k", {"rank": 256, "pairs": 120_000}, VQA), ("rank256-seed1", {"rank": 256, "train_seed": 1}, VQA),
           ("all_linear-lr2e-4-pairs120k", {"targets": "all_linear", "pairs": 120_000}, VQA),
-          ("pairs120k-seed1", {"pairs": 120_000, "train_seed": 1}, VQA)]
+          ("pairs120k-seed1", {"pairs": 120_000, "train_seed": 1}, VQA),
+          # Captions: cycle 2's 120k caption run was still near its best at the end (fact F1 72 at 30k, ~83.5 at 100k on
+          # 300 tiles). Read against blip-caption-f0 on the same 1,000 validation tiles (eval_blip --suite validation).
+          ("pairs480k", {"pairs": 480_000}, ("caption",))]
 STUDY_PAIRS, STUDY_VAL_TILES = 30_000, 1000
 # Cycle 3, from the study: the cycle-2 recipe at 240k pairs. Length was the one change that raised the ceiling (+1.1 over
 # 120k on validation); rank, alpha, all_linear, dropout, LayerNorm, 512 px and NRG did not at length or beyond seed noise.
