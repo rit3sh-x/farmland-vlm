@@ -461,7 +461,7 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
 - **Captions:** the 480k caption adapters of folds 0, 1 and 3 are being scored held out with cycle 5's VQA adapters (`c5-capc4-blip`). The VQA rows double as a determinism check against `c5-blip`. Folds 2 and 4 follow when they finish training.
 - **Cycle 6** (1.92M, fold 0) is at 176k pairs. The plan is unchanged: the other folds train only if its validation beats cycle 5's 70.7 on fold 0.
 
-## 2026-11-06 04:40: 480k captions held out on folds 0, 1, 3
+## 2026-11-06 03:30: 480k captions held out on folds 0, 1, 3
 
 - **Determinism holds.** The VQA rows of `c5-capc4-blip` match `c5-blip` exactly on all three folds (10,782 / 10,956 / 11,114 rows, sorted sets identical).
 - **Caption fact F1 goes up on every fold.** These are cycle 2's 120k caption adapters against the 480k ones, scored on the same held-out tiles.
@@ -475,3 +475,10 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
   - Fold 3's 120k caption adapter was the weak one, so it gains most. On fold 1 the n-gram scores dip slightly while fact F1 still rises by 2.2.
   - Folds 2 and 4 finish training next (248k and 144k of 480k pairs). The fold-paired interval waits for all five.
 - **Cycle 6** (1.92M, fold 0) is at 290k pairs.
+
+## 2026-11-06 03:45: the report now reads the final model from the selection rule
+
+- **The rule is now code.** `farmvlm.report.chosen_cycle` applies the 10:00 rule to the run records. For each cycle with all five folds trained, it averages each fold's best second-half validation from `done.json` and picks the highest. The records reproduce the scores the choice was made on (c3 68.15, c4 69.51, c5 71.46), so it picks cycle 5. Cycle 6 enters only once all five of its folds are trained.
+- **The final record** is `c{chosen}-capc4-blip`: the chosen cycle's VQA adapters with the 480k caption adapters. The report's headline macros now quote the ranked readout, the one chosen on validation. Greedy numbers are kept beside them as `*Greedy`. Fold standard deviations now use n−1, matching this log.
+- **New cycles table and length-curve figure.** The table's fold-paired intervals come straight from the per-fold scores in `f*.json`, e.g. cycle 5 over 4 is +1.6 [+0.8, +2.3]. The 03:10 entry's [+0.7, +2.4] came from `compare_runs`' per-fold paired estimates. The two differ only in the interval's last digit.
+- **Queued:** a `final` pipeline stage (`pipeline-9`, which starts when the caption fold-4 run exits). It scores robustness and the pointing game for the chosen cycle's fold-0 adapter, then completes the held-out record on folds 2 and 4 and pushes all three to the Hub.
