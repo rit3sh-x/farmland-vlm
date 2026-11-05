@@ -60,6 +60,9 @@ CYCLE3 = {**STUDY_REF, "pairs": 240_000}
 # Cycle 4: the 480k run then validated +1.4 over 240k (65.1 against 63.7), the curve still rising. Cycle 3 keeps
 # running, so the length curve is read on the held-out folds too (cycle 2 is its 120k point).
 CYCLE4 = {**STUDY_REF, "pairs": 480_000}
+# Cycle 5 probe: 960k pairs on fold 0 first. Doubling compute through length paid +1.9 at 240k -> 480k (fold 0), against
+# +0.8 for averaging two seeds of one length; the other folds follow only if fold 0's validation rises again.
+CYCLE5 = {**STUDY_REF, "pairs": 960_000}
 SERVED_PAIRS = 30_000  # per cycle: Qwen3.5-2B trains at ~146 min per 10k pairs on a T4
 # Cycle 2 restarts the cosine schedule from cycle 1's best adapter (its validation was still rising at 30k pairs).
 SERVED_CYCLES = 2
@@ -239,7 +242,7 @@ def main():
         # Decoding needs no training: the cycle-2 fold-0 adapters with beam search, against blip-lora/f0 (greedy)
         evaluate("study-decode-beams3", a, "eval_blip.py", "--folds", 0, "--beams", 3, "--vqa-adapter", adapter("blip-vqa-f0"),
                  "--caption-adapter", adapter("blip-caption-f0"), marker="f0.json")
-    for c, recipe in (("c3", CYCLE3), ("c4", CYCLE4)):
+    for c, recipe in (("c3", CYCLE3), ("c4", CYCLE4), ("c5", CYCLE5)):
         if not want(f"cycle{c[1]}"):
             continue
         for f in a.folds:
