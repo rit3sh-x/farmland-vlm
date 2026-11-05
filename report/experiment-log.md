@@ -457,6 +457,6 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
 
   - Against cycle 4: **+1.6 [+0.7, +2.4]**, 5/5 folds up. Fold 4 is the smallest gain, +0.7 [−0.1, +1.5].
   - Against cycle 2: **+5.1 [+3.5, +6.6]**, 5/5 folds up.
-- **The greedy readout gains less:** 70.2 ± 1.1 against cycle 4's 69.6, +0.6 [−0.6, +1.8], 4/5 folds. Longer training mostly sharpens the answer likelihoods that ranking reads, more than it changes the first token greedy decoding commits to. Ranked is the chosen readout, so the headline is 73.1. Both are reported.
+- **The greedy readout gains less:** 70.2 ± 1.1 against cycle 4's 69.6, +0.6 [−0.6, +1.8], 4/5 folds. One untested reading: longer training sharpens the answer likelihoods that ranking reads more than it changes what greedy decoding emits. Ranked is the chosen readout, so the headline is 73.1. Both are reported.
 - **Captions:** the 480k caption adapters of folds 0, 1 and 3 are being scored held out with cycle 5's VQA adapters (`c5-capc4-blip`). The VQA rows double as a determinism check against `c5-blip`. Folds 2 and 4 follow when they finish training.
 - **Cycle 6** (1.92M, fold 0) is at 176k pairs. The plan is unchanged: the other folds train only if its validation beats cycle 5's 70.7 on fold 0.
