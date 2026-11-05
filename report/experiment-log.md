@@ -323,3 +323,19 @@ The finalists on fold 0's test-protocol validation draw (6,542 items):
   - Cycle 4 replaces cycle 3 as the final recipe if its mean validation over the five folds exceeds cycle 3's. Validation here means each fold's own test-protocol draw.
   - Both cycles' held-out scores are reported, as the held-out learning curve at 120k, 240k and 480k.
   - The held-out folds do not choose between them.
+
+## 2026-11-05 10:35: averaging models does less than training longer
+
+Fold 0 test-protocol validation, ranked readout. Averaging means each candidate's log-probability is averaged over the models.
+
+| Model | Validation | Notes |
+|---|---|---|
+| 120k pairs, seed 0 | 64.7 | |
+| 120k pairs, seed 1 | 63.5 | |
+| both 120k seeds averaged | 64.9 | +0.8 over the seeds' mean, +0.2 [−0.6, +1.0] over the better seed |
+| cycle 4 (480k), alone | 67.8 | |
+| cycle 4 + cycle 3 averaged | 67.2 | −0.6 [−1.2, +0.1] against cycle 4 alone |
+
+- **Averaging cycles 3 and 4 hurts.** They share a seed, so their errors overlap, and the weaker model dilutes the stronger.
+- **Two equally strong seeds gain +0.8** over what one run is expected to score, at twice the training and inference cost. Spending the same doubling on length gave +1.9 (240k to 480k, fold 0).
+- **Decision:** no ensembles. Extra compute goes to length. A 960k-pair probe on fold 0 (`c5-vqa-f0`) tests whether the curve still rises before the other folds are trained.
