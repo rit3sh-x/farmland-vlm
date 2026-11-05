@@ -57,6 +57,9 @@ STUDY_PAIRS, STUDY_VAL_TILES = 30_000, 1000
 # 120k on validation); rank, alpha, all_linear, dropout, LayerNorm, 512 px and NRG did not at length or beyond seed noise.
 # Checks score the ranked readout (chosen on validation) on a validation draw made by the held-out sample's rules.
 CYCLE3 = {**STUDY_REF, "pairs": 240_000}
+# Cycle 4: the 480k run then validated +1.4 over 240k (65.1 against 63.7), the curve still rising. Cycle 3 keeps
+# running, so the length curve is read on the held-out folds too (cycle 2 is its 120k point).
+CYCLE4 = {**STUDY_REF, "pairs": 480_000}
 SERVED_PAIRS = 30_000  # per cycle: Qwen3.5-2B trains at ~146 min per 10k pairs on a T4
 # Cycle 2 restarts the cosine schedule from cycle 1's best adapter (its validation was still rising at 30k pairs).
 SERVED_CYCLES = 2
@@ -236,12 +239,14 @@ def main():
         # Decoding needs no training: the cycle-2 fold-0 adapters with beam search, against blip-lora/f0 (greedy)
         evaluate("study-decode-beams3", a, "eval_blip.py", "--folds", 0, "--beams", 3, "--vqa-adapter", adapter("blip-vqa-f0"),
                  "--caption-adapter", adapter("blip-caption-f0"), marker="f0.json")
-    if want("cycle3"):
+    for c, recipe in (("c3", CYCLE3), ("c4", CYCLE4)):
+        if not want(f"cycle{c[1]}"):
+            continue
         for f in a.folds:
-            train_blip(f"c3-vqa-f{f}", a, "vqa", fold=f, **CYCLE3, eval_every=40_000, val_tiles=STUDY_VAL_TILES,
+            train_blip(f"{c}-vqa-f{f}", a, "vqa", fold=f, **recipe, eval_every=recipe["pairs"] // 6, val_tiles=STUDY_VAL_TILES,
                        val_protocol="test", select="ranked", patience=99)
         # Captions keep cycle 2's adapters: the study tuned VQA, the primary metric.
-        evaluate("c3-blip", a, "eval_blip.py", "--folds", *a.folds, "--vqa-adapter", RUNS / "c3-vqa-f{fold}" / "best",
+        evaluate(f"{c}-blip", a, "eval_blip.py", "--folds", *a.folds, "--vqa-adapter", RUNS / f"{c}-vqa-f{{fold}}" / "best",
                  "--caption-adapter", RUNS / "blip-caption-f{fold}" / "best", marker=f"f{a.folds[-1]}.json")
     if want("served"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
