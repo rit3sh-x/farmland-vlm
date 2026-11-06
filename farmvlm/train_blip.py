@@ -23,6 +23,7 @@ from farmvlm.evalset import eval_items
 from farmvlm.evaluate import predict, summarise, write
 from farmvlm.images import SIZE, rgb_view
 from farmvlm.items import caption_refs, render_question
+from farmvlm.perturb import random_damage
 from farmvlm.sampler import Sampler
 from farmvlm.scheme import VIEWS
 from farmvlm.stats import StatsTable
@@ -38,18 +39,21 @@ NORMS = ["layer_norm1", "layer_norm2", "post_layernorm", "LayerNorm"]  # every L
 class Draws(IterableDataset):
     """An endless stream of (image, question, answer) from the balanced sampler; each worker draws with its own seed."""
 
-    def __init__(self, t, root, tiles, mix, seed, location_cell_share=None, size=SIZE, bands="rgb"):
+    def __init__(self, t, root, tiles, mix, seed, location_cell_share=None, size=SIZE, bands="rgb", augment=0.0):
         self.t, self.root, self.tiles, self.mix, self.seed = t, root, tiles, mix, seed
-        self.location_cell_share, self.size, self.bands = location_cell_share, size, bands
+        self.location_cell_share, self.size, self.bands, self.augment = location_cell_share, size, bands, augment
 
     def __iter__(self):
         wid = get_worker_info().id if get_worker_info() else 0
         s = Sampler(self.t, self.tiles, self.mix, self.seed * 1000 + wid, location_cell_share=self.location_cell_share)
         rng = np.random.default_rng(self.seed * 1000 + wid)
+        aug = np.random.default_rng([self.seed, wid, 1])  # its own stream, so the draws and questions match an unaugmented run
         while True:
             item = s.draw()
             ti = self.t.row_tile[item.row]
             img = rgb_view(self.root, self.t.split[ti], self.t.tile[ti], VIEWS[self.t.row_view[item.row]], self.size, self.bands)
+            if self.augment and aug.random() < self.augment:
+                img = random_damage(img, aug)
             if item.family == "caption":
                 refs = caption_refs(item)
                 yield img, "", refs[rng.integers(len(refs))]
@@ -146,6 +150,8 @@ def main():
     ap.add_argument("--train-norms", action="store_true", help="also train every LayerNorm (saved with the adapter)")
     ap.add_argument("--size", type=int, default=SIZE, help="input px; BLIP was pretrained at 384, tiles are 512")
     ap.add_argument("--base", choices=list(BASES), default="base", help="BLIP base, or large (ViT-L; captioning only)")
+    ap.add_argument("--augment", type=float, default=0.0, help="share of training images given one random photometric or "
+                    "resolution perturbation (farmvlm.perturb.random_damage)")
     ap.add_argument("--bands", choices=["rgb", "nrg"], default="rgb", help="nrg: near-infrared, red, green false colour")
     ap.add_argument("--log-every", type=int, default=50, help="optimizer steps between train.jsonl records")
     ap.add_argument("--profile", type=int, default=0, help="profile this many steps into out/profile/ (0: off)")
@@ -211,7 +217,7 @@ def main():
     (a.out / "config.json").write_text(json.dumps(cfg, indent=1))
     mix = "blip_vqa" if a.task == "vqa" else "blip_caption"
     dl = DataLoader(Draws(t, a.root, train_tiles, mix, a.train_seed + (7919 if a.resume else 0), a.location_cell_share, a.size,
-                          a.bands),
+                          a.bands, a.augment),
                     batch_size=a.batch, num_workers=2,
                     collate_fn=collate(proc, a.task, model.config.text_config.bos_token_id), prefetch_factor=4)
     name = hub.name_of(a.out)

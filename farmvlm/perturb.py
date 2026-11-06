@@ -46,6 +46,14 @@ def apply(img: Image.Image, kind: str, s, seed: int = 0) -> Image.Image:
     raise ValueError(kind)
 
 
+def random_damage(img: Image.Image, rng: np.random.Generator) -> Image.Image:
+    """Training augmentation: one photometric or resolution perturbation at a strength drawn across the suite's range."""
+    kind = str(rng.choice(["noise", "blur", "jpeg", "light", "resolution"]))
+    s = {"noise": rng.uniform(0, 30), "blur": rng.uniform(0, 4), "jpeg": int(rng.integers(10, 91)),
+         "light": rng.uniform(0, 0.4), "resolution": int(rng.integers(2, 7))}[kind]
+    return apply(img, kind, s, seed=int(rng.integers(1 << 30)))
+
+
 def _cell(word: str, kind: str) -> str:
     if word == THROUGHOUT:
         return word
