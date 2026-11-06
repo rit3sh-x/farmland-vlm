@@ -512,3 +512,12 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
   - This is one fold and one seed per cycle, but the trend is monotone across four points.
 - **Report corrected.** It now carries a length-costs-robustness paragraph and a "Perturbed images" column in the cycles table. The Qwen comparison was rewritten from the second-cycle records. Its stale claim was "NDVI most sensitive, 5–6 points"; on the same 200 tiles Qwen now loses less than BLIP to image damage. The flip and rotation claims are now numbers, and the abstract and conclusion say what length cost.
 - **Next.** Training uses no image augmentation, so the obvious test is a 480k fold-0 run trained on perturbed copies, compared with `c4-vqa-f0` on clean validation, held-out fold 0 and the robustness suite. It needs a GPU slot. Four cycle-6 runs hold about 35 GB now, so it waits for one to finish or for the cycle-6 stop signal.
+
+## 2026-11-06 07:50: augmentation run queued ahead of cycle 6 fold 4
+
+- **What.** The `augment` stage trains cycle 4's fold-0 recipe (480k pairs) with `--augment 0.5`. Half the training images get one random noise, blur, JPEG, lighting or resolution perturbation, at a strength drawn across the suite's range.
+  - On the workstation, 40 augmented draws give the same questions and answers as the plain stream, with 17 of 40 images changed. The augmentation adds about 1 ms per pair on the CPU.
+- **Compared against `c4-vqa-f0`** on three things: validation, held-out fold 0 (`aug-c4-blip`) and the robustness suite (`robust-aug-c4`). It wins if the image drop shrinks at a clean cost inside seed noise (about 1 point).
+  - Caveat: the perturbation families match the test's, so any robustness gain is an upper bound for unseen kinds of damage.
+- **Scheduling.** `pipeline-15` starts when cycle 6 fold 0's run exits (about 15:00). Cycle 6 fold 4 (`pipeline-14`) now waits for it, about 4.5 hours later, so the GPU stays at four runs (about 35 GB).
+  - The cycle-6 decision moves from about 07:30 to about 12:00 tomorrow. The stop signal on fold 0 is unchanged.
