@@ -340,6 +340,21 @@ def table_hedging(runs: Path, names: tuple) -> list[dict]:
     return out
 
 
+def table_fit(runs: Path) -> list[dict]:
+    """Fold 0 per cycle: the ranked four-question mean on 2,000 of the adapter's own training tiles (drawn by the held-out
+    rules) against its held-out fold-0 score, with clear accuracy and ambiguous credit on the training tiles."""
+    out = []
+    for name, cycle, pairs in CYCLES:
+        tr, ho = runs / f"train-c{cycle}" / "train-f0.json", runs / name / "f0.json"
+        if not (tr.exists() and ho.exists()):
+            continue
+        t, h = (json.loads(p.read_text())["vqa_ranked"] for p in (tr, ho))
+        mean = lambda m: float(np.mean([m["by_family"][f] for f in FAMILIES]))
+        out.append({"cycle": cycle, "pairs": pairs, "train": mean(t), "held": mean(h), "train_clear": t["clear_accuracy"],
+                    "train_ambiguous": t["ambiguous_credit"], "train_by_family": t["by_family"]})
+    return out
+
+
 def table_robustness(runs: Path) -> dict:
     """Table 5: accuracy drop from clean per variant (fold 0, 500-tile subset), and the clean accuracy under "clean"."""
     res = {}
@@ -494,7 +509,8 @@ MACROS = tuple("""blipMean blipMeanStd blipGreedy blipGreedyStd blipPartial blip
     if name != "blipFold" or s != "Diff") + tuple(
     m + s for m in ("blip", "vtwo", "vone") for s in [d + "Drop" for d in ROBUST_DROPS.values()] + ["JpegAcc", "RobustClean", "Perturbed"]) + (
     "capChange", "capChangeLo", "capChangeHi", "capChangeFolds", "blipCorrMean", "blipCorrMeanStd", "corrChange", "corrChangeLo",
-    "corrChangeHi", "corrChangeFolds", "corrIdentify", "corrValChange", "corrValLo", "corrValHi", "corrValFolds", "corrNdTrue", "corrNdSaid",
+    "corrChangeHi", "corrChangeFolds", "corrIdentify", "corrValChange", "corrValLo", "corrValHi", "corrValFolds", "corrNdTrue", "corrNdSaid", "fitTrain", "fitHeld", "fitGap", "fitClear", "fitAmbig", "fitExtent", "fitLocation",
+    "fitPresence", "fitTwoTrain", "fitTwoHeld", "fitTwoGap",
     "servedRgbParaphraseDrop", "servedNdviParaphraseDrop") + tuple(
     m + "Mid" + s for m in ("blip", "servedRgb", "servedNdvi") for s in ROBUST_MID.values())
 
@@ -537,6 +553,14 @@ def latex_numbers(res: dict) -> str:
         n.update(blipCorrMean=pct(np.mean(p["after"])), blipCorrMeanStd=pct(np.std(p["after"], ddof=1)), corrChange=pct(c[0]),
                  corrChangeLo=pct(c[1]), corrChangeHi=pct(c[2]), corrChangeFolds=str(c[3]),
                  corrIdentify=pct(np.mean([f[FAMILIES.index("identify")] for f in p["after_by_family"]])))
+    fit = {r["cycle"]: r for r in res.get("fit", [])}
+    if res["chosen"] in fit:
+        r = fit[res["chosen"]]
+        n.update(fitTrain=pct(r["train"]), fitHeld=pct(r["held"]), fitGap=pct(r["train"] - r["held"]), fitClear=pct(r["train_clear"]),
+                 fitAmbig=pct(r["train_ambiguous"]), **{"fit" + f.capitalize(): pct(r["train_by_family"][f])
+                                                       for f in ("presence", "extent", "location")})
+    if 2 in fit:
+        n.update(fitTwoTrain=pct(fit[2]["train"]), fitTwoHeld=pct(fit[2]["held"]), fitTwoGap=pct(fit[2]["train"] - fit[2]["held"]))
     if res.get("undercalled") and res["undercalled"][0]:
         n.update(corrNdTrue=f"{res['undercalled'][0]:,}", corrNdSaid=f"{res['undercalled'][1]:,}")
     if res.get("prior_validation"):
@@ -697,7 +721,7 @@ def main():
                "caption_change": paired(fact_f1s(a.runs, final), fact_f1s(a.runs, f"c{chosen}-blip"))
                if len(fact_f1s(a.runs, final)) == len(fact_f1s(a.runs, f"c{chosen}-blip")) == 5 else None,
                "prior": prior_heldout(a.runs, chosen, final), "prior_validation": prior_validation(a.runs, chosen),
-               "undercalled": undercalled(a.runs, chosen),
+               "undercalled": undercalled(a.runs, chosen), "fit": table_fit(a.runs),
                "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs, chosen), "cost": table_cost(a.runs), "hours": hours_by_gpu(a.runs),
                "sweep": sweep_scores(a.runs), "captions": table_caption_examples(a.runs, final),
                "location_split": table_location_split(a.runs, ("archive/v1/blip-lora", "blip-lora", final, "balanced"))}

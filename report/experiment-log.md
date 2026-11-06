@@ -547,3 +547,19 @@ Both use only the cycle-5 adapters' validation records (each fold's best check, 
 - **Check:** the uncorrected held-out means rebuilt from the row files match the `f{k}.json` summaries on all five folds.
 - **Report.** The abstract, Table 1's paragraph, the conclusion and the deck quote 74.6. The cycle table and the model comparison stay on the plain ranked readout, so lengths and models are compared under one readout. New paragraph "Correcting for label shift" in Section 5.4, and a limitation: only the stored top two answers are re-weighed, and training on draws matched to the test's mix was not tried.
 - **If cycle 6 is chosen,** the correction is refitted from cycle 6's validation rows; nothing is carried over from cycle 5.
+
+## 2026-11-06 18:05: the model underfits its own training tiles
+
+- **Question.** Is the held-out ceiling a generalisation gap (memorising training fields) or a fitting limit? Fold 0's VQA adapter from each of cycles 2 to 5 scored 2,000 of its own training tiles, drawn by the held-out sample's rules (`eval_blip.py --suite train`), captions from the 480k-pair adapter. Held-out fold 0 from the existing records.
+- **Result, ranked four-question mean, seen tiles against held out:**
+
+  | Cycle | Pairs | Seen | Held out | Gap | Seen presence | Seen identify | Seen extent | Seen location |
+  |---|---|---|---|---|---|---|---|---|
+  | 2 | 120k | 71.7 | 68.8 | 2.9 | 93.5 | 65.1 | 65.6 | 62.8 |
+  | 3 | 240k | 74.3 | 71.3 | 2.9 | 95.3 | 67.0 | 69.0 | 65.7 |
+  | 4 | 480k | 77.0 | 72.6 | 4.4 | 96.5 | 70.7 | 72.1 | 68.6 |
+  | 5 | 960k | 80.9 | 74.7 | 6.2 | 97.0 | 82.1 | 74.0 | 70.6 |
+
+  Cycle 5 on seen tiles: clear pairs 86.5, ambiguous credit 44.7.
+- **Reading.** The model has not memorised its training set; it has not yet fit it. Each doubling adds 2.6 to 3.9 points on seen tiles and 1.3 to 2.5 held out, so the gap is widening. Extent and location stay near 70 even on seen fields. The evaluator's 0.98 target would first need those fitted where the answers have been seen.
+- **Report.** New paragraph "How well it fits what it has seen" after the label-shift paragraph, and a deck slide "Underfit, not memorised". `farmvlm.report` gains `table_fit` and the `fit*` macros; they follow the chosen cycle, so a cycle-6 win needs `train-c6` (the pipeline's final stage now runs it).

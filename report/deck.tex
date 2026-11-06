@@ -239,6 +239,15 @@ Model + adapters in RAM & about 3 GB \\
 \end{columns}
 \end{frame}
 
+\begin{frame}{Underfit, not memorised}
+\begin{itemize}
+\item Fold 0's adapters scored on 2,000 of their own training tiles, drawn by the held-out rules.
+\item Cycle 2: \fitTwoTrain\% seen against \fitTwoHeld\% held out. Cycle \finalCycle: \fitTrain\% against \fitHeld\%. The gap widens from \fitTwoGap\ to \fitGap\ points.
+\item On seen tiles: presence \fitPresence\%, extent \fitExtent\%, location \fitLocation\%. Clear pairs \fitClear\%, ambiguous credit \fitAmbig\%.
+\item 98\% held out would first need extent and location fitted on fields the model has already seen.
+\end{itemize}
+\end{frame}
+
 \begin{frame}{Limitations and conclusions}
 \begin{itemize}
 \item BLIP reads RGB only while the annotators also saw near infrared; extent is the only severity signal; captions come from templates; served rows use one fold; NDVI from these cameras is relative.
