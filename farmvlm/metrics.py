@@ -1,6 +1,6 @@
 """Scoring per issues/06-evaluation-protocol.md: exact match, hedge credit, partial credit, caption facts, calibration,
 bootstrap."""
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 import numpy as np
 
@@ -84,6 +84,27 @@ def margin_hedge(family: str, top: str, second: str, p_top: float, p_second: flo
         return f"{top} or {second}"
     return top
 
+
+PRIOR_WEIGHTS = (0, 0.5, 1, 2, 3, 5)
+
+
+def prior_ratios(rows: list[dict]) -> dict:
+    """Per family and answer, (times the ranked readout gave it + 1) / (times it was true + 1) on validation rows: how
+    far the readout over- or under-calls each answer under the held-out sampling rules (label shift from training)."""
+    said, true = defaultdict(Counter), defaultdict(Counter)
+    for r in rows:
+        said[r["family"]][r["ranked"]] += 1
+        true[r["family"]][r["truth"]] += 1
+    return {f: {a: (said[f][a] + 1) / (true[f][a] + 1) for a in said[f] | true[f]} for f in said}
+
+
+def prior_pick(row: dict, ratios: dict, weight: float) -> str:
+    """The ranked readout's top two answers, each probability divided by its answer's ratio ** weight; the larger wins."""
+    a, b = row["ranked"], row.get("ranked2")
+    if b is None or not weight:
+        return a
+    q = ratios.get(row["family"], {})
+    return b if row["ranked2_conf"] / q.get(b, 1) ** weight > row["ranked_conf"] / q.get(a, 1) ** weight else a
 
 def vqa_scores(items: list[Item], preds: list[str]) -> dict:
     if not items:

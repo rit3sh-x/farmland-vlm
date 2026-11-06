@@ -94,7 +94,7 @@ Caption: ``Large drydown throughout the tile, with small weed cluster at the top
 \centering
 \resizebox{\textwidth}{!}{\input{tables/ablation.tex}}
 \begin{itemize}
-\item Mean over question types: \zeroMean\% zero-shot, \constMean\% for the best constant answer, \textbf{\blipMean\,$\pm$\,\blipMeanStd\%} after LoRA (greedy \blipGreedy\%).
+\item Mean over question types: \zeroMean\% zero-shot, \constMean\% for the best constant answer, \blipMean\,$\pm$\,\blipMeanStd\% after LoRA under the ranked readout (greedy \blipGreedy\%), \textbf{\blipCorrMean\,$\pm$\,\blipCorrMeanStd\%} after the label-shift correction.
 \item Presence \blipPresence\%, identify \blipIdentify\%, extent \blipExtent\%. Location \blipLocation\% against \constLocation\% for always saying \emph{throughout}: the smallest gain over its floor.
 \item Caption fact F1 from 0 to \blipFactF\%; CIDEr stays near zero because every caption shares one template vocabulary.
 \end{itemize}
@@ -232,6 +232,7 @@ Model + adapters in RAM & about 3 GB \\
 \item Rule fixed before any of these held-out scores were read: the cycle with the best five-fold validation wins. Held-out folds never choose.
 \item Cycle \finalCycle\ (\finalPairs): \textbf{\blipMean\%} held out, +\finalChange\ over the cycle before (\finalChangeLo\ to \finalChangeHi, \finalChangeFolds/5 folds), +\totalChange\ over cycle 2.
 \item Captions at 480k: fact F1 \vtwoFactF\% $\to$ \blipFactF\%.
+\item Training draws are balanced; the test is not. Correcting the ranking for that shift, fitted on validation (+\corrValChange, \corrValFolds/5 folds): \textbf{\blipCorrMean\%} held out, +\corrChange\ (\corrChangeLo\ to \corrChangeHi, \corrChangeFolds/5), all on identify.
 \end{itemize}
 \column{0.42\textwidth}
 \includegraphics[width=\textwidth]{figures/length_curve.pdf}
@@ -241,7 +242,7 @@ Model + adapters in RAM & about 3 GB \\
 \begin{frame}{Limitations and conclusions}
 \begin{itemize}
 \item BLIP reads RGB only while the annotators also saw near infrared; extent is the only severity signal; captions come from templates; served rows use one fold; NDVI from these cameras is relative.
-\item Masks can be turned into language that a small VLM learns to read: LoRA lifts BLIP from below a constant-answer floor to \blipMean\% of questions right on unseen fields, with confidence that supports abstaining.
+\item Masks can be turned into language that a small VLM learns to read: LoRA lifts BLIP from below a constant-answer floor to \blipCorrMean\% of questions right on unseen fields, with confidence that supports abstaining.
 \item After the fixes, length beat capacity: rank, target modules, input size and BLIP-large stayed inside seed noise, while four doublings of training pairs added \totalChange\ points held out.
 \item A learning rate that wins a short sweep can fail a long run; the official split's shared fields turned out harmless; a near-infrared view helps exactly the anomalies it should.
 \item Code: \url{github.com/rit3sh-x/farmland-vlm}. Every table and figure rebuilds from the run records.

@@ -440,3 +440,13 @@ def test_gpu_minutes_sums_segments_across_resumes(tmp_path):
     from farmvlm.report import gpu_minutes
     (tmp_path / "metrics.jsonl").write_text("".join(json.dumps({"minutes": m}) + "\n" for m in (10.0, 20.0, 5.0, 15.0)))
     assert gpu_minutes(tmp_path) == 35.0
+
+
+def test_prior_correction_swaps_to_an_undercalled_runner_up():
+    from farmvlm.metrics import prior_pick, prior_ratios
+    val = [{"family": "identify", "ranked": "none", "truth": "nutrient deficiency"}] * 3 + [
+        {"family": "identify", "ranked": "none", "truth": "none"}]
+    q = prior_ratios(val)
+    assert q["identify"]["nutrient deficiency"] == 1 / 4 and q["identify"]["none"] == 5 / 2
+    r = {"family": "identify", "ranked": "none", "ranked_conf": 0.6, "ranked2": "nutrient deficiency", "ranked2_conf": 0.3}
+    assert prior_pick(r, q, 0) == "none" and prior_pick(r, q, 1) == "nutrient deficiency"

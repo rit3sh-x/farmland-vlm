@@ -5,12 +5,14 @@
 import argparse
 import ast
 import json
+import zlib
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 
-from farmvlm.metrics import ece, field_resample_means, grouped_bootstrap, is_hedge, margin_hedge, risk_coverage, vqa_credit
+from farmvlm.metrics import (PRIOR_WEIGHTS, ece, field_resample_means, grouped_bootstrap, is_hedge, margin_hedge, prior_pick,
+                             prior_ratios, risk_coverage, vqa_credit)
 from farmvlm.items import Item
 from farmvlm.text import lenient_answer
 from farmvlm.scheme import CLASSES, CLASS_INDEX, THROUGHOUT
@@ -63,6 +65,75 @@ def item_of(r: dict) -> Item:
 def credits(rs, key="pred"):
     return np.array([vqa_credit(item_of(r), r[key]) for r in rs if r["family"] != "caption" and r.get(key) is not None])
 
+
+
+def best_val_rows(runs: Path, run: str) -> list[dict]:
+    """The validation rows of the check a run's best adapter was saved at."""
+    if not (runs / run / "done.json").exists():
+        return []
+    best = json.loads((runs / run / "done.json").read_text())["best_val"]
+    return rows(runs / run / "val" / f"{[m['val'] for m in rows(runs / run / 'metrics.jsonl')].index(best):02d}.jsonl")
+
+
+def family_means(rs: list[dict], picks: list[str]) -> np.ndarray:
+    by = defaultdict(list)
+    for r, p in zip(rs, picks):
+        by[r["family"]].append(vqa_credit(item_of(r), p))
+    return np.array([np.mean(by[f]) for f in FAMILIES])
+
+
+def fit_prior(rs: list[dict]) -> tuple[dict, dict]:
+    """Label-shift ratios from validation rows and, per family, the weight in PRIOR_WEIGHTS that scores best on them."""
+    ratios = prior_ratios(rs)
+    score = {w: family_means(rs, [prior_pick(r, ratios, w) for r in rs]) for w in PRIOR_WEIGHTS}
+    return ratios, {f: max(PRIOR_WEIGHTS, key=lambda w: score[w][k]) for k, f in enumerate(FAMILIES)}
+
+
+def prior_corrected(rs: list[dict], ratios: dict, weights: dict) -> list[str]:
+    return [prior_pick(r, ratios, weights[r["family"]]) for r in rs]
+
+
+def prior_validation(runs: Path, cycle: int) -> tuple[list, list] | None:
+    """Per fold, the four-question validation mean of the ranked readout and of its label-shift correction, each
+    field-grouped half of the fold's validation scored with ratios and weights fitted on the other half."""
+    before, after = [], []
+    for k in range(5):
+        rs = best_val_rows(runs, f"c{cycle}-vqa-f{k}")
+        if not rs:
+            return None
+        halves = [[r for r in rs if zlib.crc32(r["field"].encode()) % 2 == h] for h in (0, 1)]
+        b, a = [], []
+        for fit, test in ((0, 1), (1, 0)):
+            ratios, w = fit_prior(halves[fit])
+            b.append(family_means(halves[test], [r["ranked"] for r in halves[test]]).mean())
+            a.append(family_means(halves[test], prior_corrected(halves[test], ratios, w)).mean())
+        before.append(float(np.mean(b)))
+        after.append(float(np.mean(a)))
+    return before, after
+
+
+def undercalled(runs: Path, cycle: int, family: str = "identify", answer: str = "nutrient deficiency") -> tuple[int, int]:
+    """(times true, times the ranked readout gave it) for one answer over a cycle's five validation sets."""
+    rs = [r for k in range(5) for r in best_val_rows(runs, f"c{cycle}-vqa-f{k}") if r["family"] == family]
+    return sum(r["truth"] == answer for r in rs), sum(r["ranked"] == answer for r in rs)
+
+
+def prior_heldout(runs: Path, cycle: int, name: str) -> dict | None:
+    """Held-out four-question means per fold for the ranked readout and its label-shift correction, fitted on each
+    fold's own validation rows, with the per-family change and the weights chosen."""
+    out = {"before": [], "after": [], "after_by_family": [], "weights": []}
+    for k in range(5):
+        val = best_val_rows(runs, f"c{cycle}-vqa-f{k}")
+        rs = [r for r in rows(runs / name / f"f{k}.jsonl") if r["family"] in FAMILIES]
+        if not val or not rs:
+            return None
+        ratios, w = fit_prior(val)
+        fb, fa = family_means(rs, [r["ranked"] for r in rs]), family_means(rs, prior_corrected(rs, ratios, w))
+        out["before"].append(float(fb.mean()))
+        out["after"].append(float(fa.mean()))
+        out["after_by_family"].append(fa.tolist())
+        out["weights"].append(w)
+    return out
 
 def mean_std(xs):
     xs = [x for x in xs if x is not None]
@@ -422,7 +493,8 @@ MACROS = tuple("""blipMean blipMeanStd blipGreedy blipGreedyStd blipPartial blip
     name + s for _, name in FOLD0_MACROS for s in ("Mean", "Pooled", "Presence", "Location", "FactF", "Precision", "Recall", "Diff")
     if name != "blipFold" or s != "Diff") + tuple(
     m + s for m in ("blip", "vtwo", "vone") for s in [d + "Drop" for d in ROBUST_DROPS.values()] + ["JpegAcc", "RobustClean", "Perturbed"]) + (
-    "capChange", "capChangeLo", "capChangeHi", "capChangeFolds",
+    "capChange", "capChangeLo", "capChangeHi", "capChangeFolds", "blipCorrMean", "blipCorrMeanStd", "corrChange", "corrChangeLo",
+    "corrChangeHi", "corrChangeFolds", "corrIdentify", "corrValChange", "corrValLo", "corrValHi", "corrValFolds", "corrNdTrue", "corrNdSaid",
     "servedRgbParaphraseDrop", "servedNdviParaphraseDrop") + tuple(
     m + "Mid" + s for m in ("blip", "servedRgb", "servedNdvi") for s in ROBUST_MID.values())
 
@@ -459,6 +531,17 @@ def latex_numbers(res: dict) -> str:
     if res.get("caption_change"):
         c = res["caption_change"]
         n.update(capChange=pct(c[0]), capChangeLo=pct(c[1]), capChangeHi=pct(c[2]), capChangeFolds=str(c[3]))
+    if res.get("prior"):
+        p = res["prior"]
+        c = paired(p["after"], p["before"])
+        n.update(blipCorrMean=pct(np.mean(p["after"])), blipCorrMeanStd=pct(np.std(p["after"], ddof=1)), corrChange=pct(c[0]),
+                 corrChangeLo=pct(c[1]), corrChangeHi=pct(c[2]), corrChangeFolds=str(c[3]),
+                 corrIdentify=pct(np.mean([f[FAMILIES.index("identify")] for f in p["after_by_family"]])))
+    if res.get("undercalled") and res["undercalled"][0]:
+        n.update(corrNdTrue=f"{res['undercalled'][0]:,}", corrNdSaid=f"{res['undercalled'][1]:,}")
+    if res.get("prior_validation"):
+        c = paired(res["prior_validation"][1], res["prior_validation"][0])
+        n.update(corrValChange=pct(c[0]), corrValLo=pct(c[1]), corrValHi=pct(c[2]), corrValFolds=str(c[3]))
     n.update(tfourHours=f"{res['hours'].get('T4', 0):.0f}", proHours=f"{res['hours'].get('RTX PRO 5000', 0):.0f}")
     if res.get("constant"):
         c = res["constant"]
@@ -613,6 +696,8 @@ def main():
                "robustness_shared": robustness_shared(a.runs),
                "caption_change": paired(fact_f1s(a.runs, final), fact_f1s(a.runs, f"c{chosen}-blip"))
                if len(fact_f1s(a.runs, final)) == len(fact_f1s(a.runs, f"c{chosen}-blip")) == 5 else None,
+               "prior": prior_heldout(a.runs, chosen, final), "prior_validation": prior_validation(a.runs, chosen),
+               "undercalled": undercalled(a.runs, chosen),
                "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs, chosen), "cost": table_cost(a.runs), "hours": hours_by_gpu(a.runs),
                "sweep": sweep_scores(a.runs), "captions": table_caption_examples(a.runs, final),
                "location_split": table_location_split(a.runs, ("archive/v1/blip-lora", "blip-lora", final, "balanced"))}
