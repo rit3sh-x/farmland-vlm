@@ -539,3 +539,11 @@ Both use only the cycle-5 adapters' validation records (each fold's best check, 
 - **Correction.** Per family and answer, ratio = (times answered + 1) / (times true + 1) on validation. The top two answers' probabilities are divided by ratio^w, and the larger wins. w is chosen per family from {0, 0.5, 1, 2, 3, 5} on the same validation rows. This is the label-shift adjustment of Saerens et al. (2002), estimated from the readout's own confusion in the spirit of Lipton et al. (2018).
 - **Validation evidence.** Fitted on one field-grouped half of a fold's own validation and scored on the other half, both ways: **+1.8** on the four-question mean, **5/5 folds up**, smallest gain +1.3. All of it is identify (+7.4); the other families pick w = 0 or nearly so. Pooling other folds' validation was rejected, because their validation tiles can sit in this fold's test fold.
 - **Rule, fixed now.** The corrected readout becomes the headline readout if its split-half validation change is positive on at least 4/5 folds. It is (5/5). For the held-out read, each fold's ratios and weights are fitted on that fold's whole validation set, then applied once to its stored held-out top-two answers. The held-out result is reported whatever it is, beside the plain ranked readout.
+
+## 2026-11-06 16:55: the label-shift correction holds out
+
+- **Held out, read once:** the four-question mean goes from 73.1 to **74.6 ± 1.4**, a fold-paired change of **+1.5 [+0.9, +2.0], 5/5 folds up**. Identify goes from 69.3 to 75.1; the other three families move by at most 0.01 points.
+- **Weights chosen on each fold's whole validation set:** identify takes w = 2 or 3 on every fold, presence 0 or 0.5, extent and location 0.
+- **Check:** the uncorrected held-out means rebuilt from the row files match the `f{k}.json` summaries on all five folds.
+- **Report.** The abstract, Table 1's paragraph, the conclusion and the deck quote 74.6. The cycle table and the model comparison stay on the plain ranked readout, so lengths and models are compared under one readout. New paragraph "Correcting for label shift" in Section 5.4, and a limitation: only the stored top two answers are re-weighed, and training on draws matched to the test's mix was not tried.
+- **If cycle 6 is chosen,** the correction is refitted from cycle 6's validation rows; nothing is carried over from cycle 5.
