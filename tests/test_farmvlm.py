@@ -265,26 +265,27 @@ def test_report_tables_from_runs(tmp_path):
     t = synthetic_table()
     items = eval_items(t, np.arange(12), np.array([], int))
     field_of = lambda r: str(t.field[t.row_tile[r]])
-    for name, fixed in (("baseline", "no"), ("blip-lora", "yes"), ("served-rgb-eval", "yes")):
+    final = "c5-capc4-blip"
+    for name, fixed in (("baseline", "no"), (final, "yes"), ("served-rgb-eval", "yes")):
         (tmp_path / name).mkdir()
         for f in range(5 if name != "served-rgb-eval" else 1):
             rows_ = predict(_EchoReader(items, fixed), items, lambda r: None, batch=8)
             write(rows_, summarise(rows_), tmp_path / name / f"f{f}", field_of)
-    t1 = table_ablation(tmp_path)
+    t1 = table_ablation(tmp_path, final)
     assert [r["model"] for r in t1] == ["Zero-shot BLIP", "BLIP-LoRA"] and t1[1]["presence"][1] == pytest.approx(0.0, abs=1e-12)
-    (tmp_path / "archive" / "v1").mkdir(parents=True)
-    (tmp_path / "blip-lora").rename(tmp_path / "archive" / "v1" / "blip-lora")
-    (tmp_path / "blip-lora").mkdir()
-    for f in range(5):
-        write(rows_, summarise(rows_), tmp_path / "blip-lora" / f"f{f}", field_of)
-    assert [r["model"] for r in table_ablation(tmp_path)] == ["Zero-shot BLIP", "BLIP-LoRA v1", "BLIP-LoRA"]
-    assert table_per_class(tmp_path)["baseline"]["drydown"]["n_present"] >= 0
-    t3 = {r["model"]: r for r in table_fold0(tmp_path)}
-    assert list(t3) == ["Zero-shot BLIP", "BLIP-LoRA v1", "BLIP-LoRA", "Qwen3.5-2B LoRA, RGB"]
+    for earlier in ("archive/v1/blip-lora", "blip-lora"):
+        (tmp_path / earlier).mkdir(parents=True)
+        for f in range(5):
+            write(rows_, summarise(rows_), tmp_path / earlier / f"f{f}", field_of)
+    assert [r["model"] for r in table_ablation(tmp_path, final)] == ["Zero-shot BLIP", "BLIP-LoRA v1", "BLIP-LoRA v2", "BLIP-LoRA"]
+    assert table_per_class(tmp_path, ("baseline", final))["baseline"]["drydown"]["n_present"] >= 0
+    t3 = {r["model"]: r for r in table_fold0(tmp_path, final)}
+    assert list(t3) == ["Zero-shot BLIP", "BLIP-LoRA v1", "BLIP-LoRA v2", "BLIP-LoRA", "Qwen3.5-2B LoRA, RGB"]
     assert t3["BLIP-LoRA"]["diff"] is None and t3["Qwen3.5-2B LoRA, RGB"]["diff"][0] == pytest.approx(0.0)
     assert t3["BLIP-LoRA v1"]["diff"][0] == pytest.approx(0.0)
     assert "BLIP-LoRA" in latex_fold0(list(t3.values())) and 0 <= table_constant(tmp_path)["mean"][0] <= 1
-    assert {r["model"] for r in table_hedging(tmp_path)} == {"baseline", "blip-lora", "served-rgb-eval"}
+    names = ("baseline", final, "served-rgb-eval")
+    assert {r["model"] for r in table_hedging(tmp_path, names)} == set(names)
 
 
 def test_finding_confidence_uses_only_its_tokens():

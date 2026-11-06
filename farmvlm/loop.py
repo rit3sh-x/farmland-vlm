@@ -112,7 +112,9 @@ def run(model, batches, loss_fn, validate, cfg: LoopConfig):
     named = [(tower(n), p) for n, p in model.named_parameters() if p.requires_grad]
     alert = cfg.on_alert or (lambda title, text: print(f"ALERT {title}: {text}", flush=True))
     prof = Profile(cfg) if cfg.profile_steps else None
-    torch.cuda.reset_peak_memory_stats()
+    cuda = torch.cuda.is_available()
+    if cuda:
+        torch.cuda.reset_peak_memory_stats()
     model.train()
     t0, skipped, micro = time.time(), 0, 0
     window, losses, gnorms, tw = defaultdict(list), [], [], time.time()
@@ -148,8 +150,9 @@ def run(model, batches, loss_fn, validate, cfg: LoopConfig):
                     "train/grad_norm": float(gv.mean()) if len(gv) else float("nan"),
                     "train/grad_norm_max": float(gv.max()) if len(gv) else float("nan"),
                     "train/lr": sched.get_last_lr()[0], "train/loss_scale": scaler.get_scale(),
-                    "train/pairs_per_s": cfg.log_every * cfg.batch / (time.time() - tw),
-                    "gpu/mem_gb": torch.cuda.memory_allocated() / 2**30, "gpu/peak_gb": torch.cuda.max_memory_allocated() / 2**30}
+                    "train/pairs_per_s": cfg.log_every * cfg.batch / (time.time() - tw)}
+            if cuda:
+                trec |= {"gpu/mem_gb": torch.cuda.memory_allocated() / 2**30, "gpu/peak_gb": torch.cuda.max_memory_allocated() / 2**30}
             tlog.write(json.dumps(trec) + "\n"); tlog.flush()
             if cfg.on_log:
                 cfg.on_log(trec)
@@ -187,7 +190,7 @@ def run(model, batches, loss_fn, validate, cfg: LoopConfig):
     minutes = (time.time() - t0) / 60
     (cfg.out / "done.json").write_text(json.dumps({
         "best_val": state["best"], "pairs": state["step"] * cfg.batch, "minutes_this_session": round(minutes, 1),
-        "peak_gpu_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2), "gpu": torch.cuda.get_device_name()}))
+        **({"peak_gpu_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2), "gpu": torch.cuda.get_device_name()} if cuda else {})}))
     if cfg.on_checkpoint:
         cfg.on_checkpoint()
     return state
