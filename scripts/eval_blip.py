@@ -68,8 +68,9 @@ def main():
     ap.add_argument("--caption-adapter", help="path, may contain {fold}")
     ap.add_argument("--also-vqa-adapter", nargs="*", default=[],
                     help="more VQA adapters (may contain {fold}) whose ranked scores are averaged with --vqa-adapter's")
-    ap.add_argument("--suite", choices=["clean", "robustness", "leakage", "validation"], default="clean",
-                    help="validation: the fold's inner-validation items (train_blip's split and draw), where readouts are chosen")
+    ap.add_argument("--suite", choices=["clean", "robustness", "leakage", "validation", "train"], default="clean",
+                    help="validation: the fold's inner-validation items (train_blip's split and draw), where readouts are chosen; "
+                         "train: the held-out rules applied to the fold's training tiles, for the generalisation gap")
     ap.add_argument("--val-tiles", type=int, default=1000)
     ap.add_argument("--val-protocol", choices=["random", "test"], default="random", help="see train_blip.validation_items")
     ap.add_argument("--batch", type=int, default=48)
@@ -121,6 +122,12 @@ def main():
         if a.suite == "validation":
             from farmvlm.train_blip import validation_items
             run(reader, validation_items(t, "folds", f, a.seed, a.val_tiles, a.val_protocol), f"val-f{f}", ranked=True)
+            continue
+        if a.suite == "train":
+            from farmvlm.train_blip import split_tiles
+            pool, _ = split_tiles(t, "folds", f, a.seed)
+            run(reader, eval_items(t, F.pick_test_sample(t, None, None, a.seed, pool=pool), F.clean_views(t, pool, a.seed)),
+                f"train-f{f}", ranked=True)
             continue
         tiles = F.pick_test_sample(t, fold, f, a.seed)
         if a.suite == "clean":
