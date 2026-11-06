@@ -563,3 +563,9 @@ Both use only the cycle-5 adapters' validation records (each fold's best check, 
   Cycle 5 on seen tiles: clear pairs 86.5, ambiguous credit 44.7.
 - **Reading.** The model has not memorised its training set; it has not yet fit it. Each doubling adds 2.6 to 3.9 points on seen tiles and 1.3 to 2.5 held out, so the gap is widening. Extent and location stay near 70 even on seen fields. The evaluator's 0.98 target would first need those fitted where the answers have been seen.
 - **Report.** New paragraph "How well it fits what it has seen" after the label-shift paragraph, and a deck slide "Underfit, not memorised". `farmvlm.report` gains `table_fit` and the `fit*` macros; they follow the chosen cycle, so a cycle-6 win needs `train-c6` (the pipeline's final stage now runs it).
+
+## 2026-11-06 18:25: cycle 7 probe queued, fold 0 first
+
+- **Why length again.** Every capacity knob tried at 30k to 120k pairs (rank 128 and 256, all_linear, alpha 4×) gave faster convergence, not a higher ceiling; length is the one change that has kept raising held-out scores. The fit check above shows fold 0 still underfits its own training tiles at 960k. Cycle 6 fold 0 validated 71.8 against cycle 5's 70.7: a smaller step than cycle 4 to 5 (+2.9), but still up.
+- **What.** Cycle 7 trains the cycle-2 recipe at 3.84M pairs on fold 0, in the slot cycle 6 fold 1 frees (about 21:00). At about 33 pairs/s on the shared card this is about 32 hours.
+- **Rule, fixed now.** Folds 1 to 4 follow only if cycle 7 fold 0's best validation beats cycle 6 fold 0's 71.8. The selection rule is unchanged and simply sees one more cycle: of the cycles trained on all five folds, the highest mean validation wins. Held-out scores never choose.

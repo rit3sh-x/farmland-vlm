@@ -20,7 +20,7 @@ from farmvlm.scheme import CLASSES, CLASS_INDEX, THROUGHOUT
 FAMILIES = ("presence", "identify", "extent", "location")
 # Held-out record of each training-length cycle (VQA adapters of that cycle, cycle 2's caption adapters) and its pairs.
 CYCLES = (("blip-lora", 2, 120_000), ("c3-blip", 3, 240_000), ("c4-blip", 4, 480_000), ("c5-blip", 5, 960_000),
-          ("c6-blip", 6, 1_920_000))
+          ("c6-blip", 6, 1_920_000), ("c7-blip", 7, 3_840_000))
 T95 = {1: 12.71, 2: 4.30, 3: 3.18, 4: 2.78}  # two-sided 95% t quantiles by degrees of freedom
 
 
