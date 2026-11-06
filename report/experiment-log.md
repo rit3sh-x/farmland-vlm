@@ -521,3 +521,11 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
   - Caveat: the perturbation families match the test's, so any robustness gain is an upper bound for unseen kinds of damage.
 - **Scheduling.** `pipeline-15` starts when cycle 6 fold 0's run exits (about 15:00). Cycle 6 fold 4 (`pipeline-14`) now waits for it, about 4.5 hours later, so the GPU stays at four runs (about 35 GB).
   - The cycle-6 decision moves from about 07:30 to about 12:00 tomorrow. The stop signal on fold 0 is unchanged.
+
+## 2026-11-06 16:10: cycle 6 fold 0 passes the stop signal
+
+- **Validation.** `c6-vqa-f0` (1.92M pairs) peaks at **71.8** at 1.6M pairs and ends at 71.6. Cycle 5's fold 0 reached 70.7, so the stop signal does not fire and folds 1–4 keep training.
+  - Checks: 63.5, 65.7, 69.1, 69.9, 71.8, 71.6. This is the first run whose last check is not its best.
+  - The gain is +1.1 on fold 0 against cycle 4 → 5's +2.9, so returns are shrinking.
+- **No held-out look.** `c6-blip` fold 0 is being scored now, but its file is not read until the five-fold validation rule picks a cycle.
+- **Next.** Folds 1–3 are at about 1.32M pairs and finish around 21:00. The augmentation run starts once fold 0's held-out scoring exits, and fold 4 follows it.
