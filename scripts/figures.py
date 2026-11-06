@@ -16,7 +16,7 @@ import numpy as np  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from farmvlm.metrics import risk_coverage, vqa_credit  # noqa: E402
-from farmvlm.report import FAMILIES, chosen_cycle, credits, final_run, item_of, rows, table_cycles  # noqa: E402
+from farmvlm.report import FAMILIES, chosen_cycle, credits, final_run, item_of, robustness_shared, rows, table_cycles  # noqa: E402
 
 # One colour per model across every figure (validated for colour-vision deficiency on white; dataviz palette).
 INK, MUTED, GRID = "#1a1a19", "#6b6a64", "#e4e3de"
@@ -130,8 +130,8 @@ def robustness(runs: Path, out: Path):
     names = [n for n in names if n != "clean"]
     clean = accuracy(rows(blip / "f0-clean.jsonl"))
     drops = {n: accuracy(rows(blip / f"f0-{n}.jsonl")) - clean for n in names}
-    served = [n for n in ("served-rgb", "served-ndvi") if (runs / f"robust-{n}" / "f0-clean.jsonl").exists()]
-    fig, axes = plt.subplots(1, 2 if served else 1, figsize=(6.3, 3.8), squeeze=False)
+    change = robustness_shared(runs)
+    fig, axes = plt.subplots(1, 2 if change else 1, figsize=(6.3, 3.8), squeeze=False)
     ax = axes[0][0]
     order = sorted(names, key=lambda n: drops[n])
     ax.barh(range(len(order)), [drops[n] for n in order], 0.7, color=MODELS[final][1])
@@ -140,21 +140,13 @@ def robustness(runs: Path, out: Path):
     ax.grid(axis="x")
     ax.grid(axis="y", visible=False)
     ax.set_xlabel("Accuracy change from clean (BLIP-LoRA, 500 tiles)")
-    if served:
+    if change:
         ax = axes[0][1]
-        rows_of = {n: {r["row"] for r in rows(runs / f"robust-{n}" / "f0-clean.jsonl")} for n in served}
-        shared = sorted(p.name.removesuffix(".jsonl").removeprefix("f0-") for p in (runs / f"robust-{served[0]}").glob("f0-*.jsonl"))
-        shared = [n for n in shared if n != "clean"]
-        series = [(final, blip)] + [(f"served-{n.split('-')[1]}-eval", runs / f"robust-{n}") for n in served]
-        subset = rows_of[served[0]]
-        change = {}
-        for model, d in series:
-            c = accuracy([r for r in rows(d / "f0-clean.jsonl") if r["row"] in subset])
-            change[model] = {n: accuracy([r for r in rows(d / f"f0-{n}.jsonl") if r["row"] in subset]) - c for n in shared}
-        shared = sorted(shared, key=lambda n: change[final][n])
+        series = ((final, "blip"), ("served-rgb-eval", "servedRgb"), ("served-ndvi-eval", "servedNdvi"))
+        shared = sorted(change["blip"], key=change["blip"].get)
         y, h = np.arange(len(shared)), 0.8 / len(series)
-        for k, (model, _) in enumerate(series):
-            ax.barh(y + 0.4 - h * (k + 0.5), [change[model][n] for n in shared], h * 0.88, color=MODELS[model][1], label=MODELS[model][0])
+        for k, (model, key) in enumerate(series):
+            ax.barh(y + 0.4 - h * (k + 0.5), [change[key][n] for n in shared], h * 0.88, color=MODELS[model][1], label=MODELS[model][0])
         ax.set_yticks(y, [perturbation(n) for n in shared])
         ax.axvline(0, color=MUTED, lw=0.8)
         ax.grid(axis="x")

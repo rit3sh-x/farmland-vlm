@@ -142,8 +142,9 @@ Caption: ``Large drydown throughout the tile, with small weed cluster at the top
 \centering
 \includegraphics[width=0.95\textwidth,height=0.58\textheight,keepaspectratio]{figures/robustness.pdf}
 \begin{itemize}
-\item Lighting and flips cost nothing; blur, noise and lost resolution degrade smoothly; heavy JPEG costs \blipJpegDrop\ points.
-\item The largest drop is new question wording: \blipParaphraseDrop\ points for BLIP, 4--5 for Qwen, whose language model has met many ways to ask.
+\item Lighting and flips cost at most \blipLightDrop; blur, noise and resolution degrade smoothly; heavy JPEG costs \blipJpegDrop.
+\item Length made BLIP fragile: mean change over image perturbations $-$\vtwoPerturbed\ at 120k pairs, $-$\blipPerturbed\ at \finalPairs. Qwen loses less.
+\item New wording: \blipParaphraseDrop\ for BLIP, \servedRgbParaphraseDrop\ and \servedNdviParaphraseDrop\ for Qwen RGB and NDVI.
 \end{itemize}
 \end{frame}
 
@@ -207,7 +208,7 @@ Model + adapters in RAM & about 3 GB \\
 \item \textbf{Captions never ended.} \texttt{blip-image-captioning-base} gives a full stop a loss near 13 nats and every target ended in one, so captions ran to \voneFoldWords\ words against \referenceWords\ in the truth (precision \voneFoldPrecision\%). Fix: targets end on their last word. Fold-0 fact F1 \voneFoldFactF\% $\to$ \blipFoldFactF\% (validation 0.631 $\to$ 0.839).
 \item \textbf{Early stopping fired on noise.} Patience 3 on a 300-tile validation set: every VQA fold stopped at 80--115k pairs while its last six checks sat within 0.6--3.4 points. Fix: the full 120k pairs, best second-half check.
 \item \textbf{Location: do not rebalance the draws.} 55\% of truths are \emph{throughout}; the first cycle scored \voneLocThroughout\% on those and \voneLocLocalised\% on localised items. Drawing cells 65\% of the time lifted localised items to \balLocLocalised\% but cost \balLocDrop\ points on the natural mix. The final sampler keeps the data's own draws; both adapters are kept.
-\item \textbf{Five phrasings were too few.} Twelve now, no synonym shared with the held-out set: paraphrase drop \voneParaphraseDrop\ $\to$ \blipParaphraseDrop\ points.
+\item \textbf{Five phrasings looked too few.} Twelve now, no synonym shared with the held-out set: paraphrase drop \voneParaphraseDrop\ $\to$ \vtwoParaphraseDrop\ points, barely less; longer training took it to \blipParaphraseDrop.
 \item \textbf{Qwen:} 30k more pairs on the corrected targets, warm-started from cycle 1.
 \end{itemize}
 \end{frame}

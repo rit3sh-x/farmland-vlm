@@ -82,21 +82,34 @@ def fold_means(runs: Path, name: str, readout: str = "vqa_ranked", key: str = "b
     return [float(np.mean([m[readout][key][f] for f in FAMILIES])) for m in ms]
 
 
+def paired(after, before) -> tuple:
+    """Mean fold-paired change with a 95% t interval over folds, and the number of folds that improved."""
+    d = np.array(after) - np.array(before)
+    h = T95[len(d) - 1] * d.std(ddof=1) / np.sqrt(len(d))
+    return float(d.mean()), float(d.mean() - h), float(d.mean() + h), int((d > 0).sum())
+
+
+def fact_f1s(runs: Path, name: str) -> list[float]:
+    return [json.loads((runs / name / f"f{k}.json").read_text())["caption_facts"]["f1"] for k in range(5)
+            if (runs / name / f"f{k}.json").exists()]
+
+
 def table_cycles(runs: Path) -> list[dict]:
     """Held-out four-question mean per training-length cycle over five folds, with the change from the cycle before as
-    a paired t interval over folds; the selection score beside it."""
-    out, prev = [], None
+    a paired t interval over folds; the selection score beside it, and the mean greedy accuracy change over the image
+    perturbations on fold 0's robustness tiles."""
+    out, prev, rob = [], None, table_robustness(runs)
     for name, cycle, pairs in CYCLES:
         ranked = fold_means(runs, name)
         if len(ranked) < 5:
             continue
         row = {"cycle": cycle, "pairs": pairs, "val": cycle_validation(runs, cycle) if cycle > 2 else None,
                "ranked": mean_std(ranked), "greedy": mean_std(fold_means(runs, name, "vqa_generated")),
-               "partial": mean_std(fold_means(runs, name, key="partial_by_family")), "change": None}
+               "partial": mean_std(fold_means(runs, name, key="partial_by_family")), "change": None,
+               "perturbed": float(np.mean([v for k, v in rob[f"robust-c{cycle}"].items() if k not in ("clean", "paraphrase")]))
+               if f"robust-c{cycle}" in rob else None}
         if prev:
-            d = np.array(ranked) - np.array(prev)
-            h = T95[len(d) - 1] * d.std(ddof=1) / np.sqrt(len(d))
-            row["change"] = (float(d.mean()), float(d.mean() - h), float(d.mean() + h), int((d > 0).sum()))
+            row["change"] = paired(ranked, prev)
         out.append(row)
         prev = ranked
     return out
@@ -257,16 +270,29 @@ def table_hedging(runs: Path, names: tuple) -> list[dict]:
 
 
 def table_robustness(runs: Path) -> dict:
-    """Table 5: accuracy drop from clean per variant (fold 0, 500-tile subset)."""
+    """Table 5: accuracy drop from clean per variant (fold 0, 500-tile subset), and the clean accuracy under "clean"."""
     res = {}
     for d in sorted(runs.glob("robust-*")) + sorted((runs / "archive" / "v1").glob("robust-*")):
         clean = d / "f0-clean.json"
         if not clean.exists():
             continue
         base = json.loads(clean.read_text())["vqa_generated"]["accuracy"]
-        res[str(d.relative_to(runs))] = {p.stem.removeprefix("f0-"): json.loads(p.read_text())["vqa_generated"]["accuracy"] - base
-                       for p in sorted(d.glob("f0-*.json")) if p.stem != "f0-clean"}
+        res[str(d.relative_to(runs))] = {"clean": base} | {
+            p.stem.removeprefix("f0-"): json.loads(p.read_text())["vqa_generated"]["accuracy"] - base
+            for p in sorted(d.glob("f0-*.json")) if p.stem != "f0-clean"}
     return res
+
+
+def robustness_shared(runs: Path) -> dict:
+    """Accuracy change from clean for the chosen cycle's BLIP and both Qwen variants, on the 200 tiles Qwen was scored on."""
+    dirs = {"blip": runs / f"robust-c{chosen_cycle(runs)}", "servedRgb": runs / "robust-served-rgb",
+            "servedNdvi": runs / "robust-served-ndvi"}
+    if not all((d / "f0-clean.jsonl").exists() for d in dirs.values()):
+        return {}
+    subset = {r["row"] for r in rows(dirs["servedRgb"] / "f0-clean.jsonl")}
+    variants = [p.stem.removeprefix("f0-") for p in sorted(dirs["servedRgb"].glob("f0-*.jsonl")) if p.stem != "f0-clean"]
+    acc = lambda d, v: float(credits([r for r in rows(d / f"f0-{v}.jsonl") if r["row"] in subset]).mean())
+    return {k: {v: acc(d, v) - acc(d, "clean") for v in variants} for k, d in dirs.items()}
 
 
 def table_leakage(runs: Path) -> dict:
@@ -363,9 +389,11 @@ def latex_cycles(t: list[dict]) -> str:
         ch = r["change"]
         change = "--" if ch is None else f"{100 * ch[0]:+.1f} [{100 * ch[1]:+.1f}, {100 * ch[2]:+.1f}], {ch[3]}/5"
         body.append(" & ".join([str(r["cycle"]), f"{r['pairs'] // 1000:,}k", fmt(r["val"]) if r["val"] else "--",
-                                fmt(*r["ranked"]), change, fmt(*r["greedy"]), fmt(*r["partial"])]))
-    head = "Cycle & Pairs & Validation & Held out, ranked & Change [95\\% CI], folds up & Held out, greedy & Partial credit"
-    return tabular("crcccc" + "c", head, body)
+                                fmt(*r["ranked"]), change, fmt(*r["greedy"]), fmt(*r["partial"]),
+                                "--" if r["perturbed"] is None else f"${100 * r['perturbed']:+.1f}$"]))
+    head = ("Cycle & Pairs & Validation & Held out, ranked & Change [95\\% CI], folds up & Held out, greedy & Partial credit"
+            " & Perturbed images")
+    return tabular("crccccc" + "c", head, body)
 
 
 def table_pointing(runs: Path, cycle: int) -> dict:
@@ -377,6 +405,10 @@ def table_pointing(runs: Path, cycle: int) -> dict:
 FOLD0_MACROS = (("Qwen3.5-2B LoRA, RGB", "qwenRgb"), ("Qwen3.5-2B LoRA, RGB + NDVI", "qwenNdvi"), ("BLIP-LoRA", "blipFold"),
                 ("BLIP-LoRA v1", "voneFold"), ("BLIP-LoRA v2", "vtwoFold"), ("BLIP-LoRA v2, balanced location draws", "balanced"),
                 ("BLIP-DoRA v1", "dora"))
+ROBUST_DROPS = {"paraphrase": "Paraphrase", "jpeg-10": "Jpeg", "blur-4": "Blur", "noise-30": "Noise", "resolution-6": "Res",
+                "light-0.4": "Light", "hflip-None": "Flip", "rot90-None": "Rot"}
+ROBUST_MID = {"jpeg-20": "Jpeg", "blur-2": "Blur", "noise-15": "Noise", "resolution-3": "Res", "light-0.25": "Light"}
+
 # Every macro the report and the deck may quote: one without a record yet prints ?? instead of breaking the build.
 # Five-fold "Mean" macros are the ranked readout, chosen on validation; "Greedy" ones are the generated answers.
 MACROS = tuple("""blipMean blipMeanStd blipGreedy blipGreedyStd blipPartial blipFactF blipFactFStd blipPresence blipIdentify
@@ -384,12 +416,15 @@ MACROS = tuple("""blipMean blipMeanStd blipGreedy blipGreedyStd blipPartial blip
     vonePresence voneIdentify voneExtent voneLocation vtwoMean vtwoMeanStd vtwoGreedy vtwoFactF
     tfourHours proHours finalCycle finalPairs finalVal prevVal finalChange finalChangeLo finalChangeHi finalChangeFolds totalChange totalChangeLo totalChangeHi
     constMean constLocation constIdentify blipAccEighty blipAurc blipCreditAmb blipAccClear blipEce blipAccAll zeroAurc
-    blipParaphraseDrop blipJpegDrop blipBlurDrop voneParaphraseDrop voneJpegDrop servedRgbParaphraseDrop servedNdviParaphraseDrop
     leakGap leakLo leakHi leakSeen leakUnseen ndviDiff ndviLo ndviHi qwenZeroLenient pointZero pointLora pointChance energyZero energyLora
     voneLocThroughout voneLocLocalised vtwoLocThroughout vtwoLocLocalised blipLocThroughout blipLocLocalised balLocThroughout
     balLocLocalised locNThroughout locNLocalised balLocDrop referenceWords blipFoldWords voneFoldWords""".split()) + tuple(
     name + s for _, name in FOLD0_MACROS for s in ("Mean", "Pooled", "Presence", "Location", "FactF", "Precision", "Recall", "Diff")
-    if name != "blipFold" or s != "Diff")
+    if name != "blipFold" or s != "Diff") + tuple(
+    m + s for m in ("blip", "vtwo", "vone") for s in [d + "Drop" for d in ROBUST_DROPS.values()] + ["JpegAcc", "RobustClean", "Perturbed"]) + (
+    "capChange", "capChangeLo", "capChangeHi", "capChangeFolds",
+    "servedRgbParaphraseDrop", "servedNdviParaphraseDrop") + tuple(
+    m + "Mid" + s for m in ("blip", "servedRgb", "servedNdvi") for s in ROBUST_MID.values())
 
 
 def latex_numbers(res: dict) -> str:
@@ -400,7 +435,6 @@ def latex_numbers(res: dict) -> str:
     abl = {r["model"]: r for r in res["ablation"]}
     f0 = {r["model"]: r for r in res["fold0"]}
     hed = {r["model"]: r for r in res["hedging"]}
-    rob = res["robustness"].get(f"robust-c{res['chosen']}", {})
     n = {}
     for label, k in (("BLIP-LoRA", "blip"), ("Zero-shot BLIP", "zero"), ("BLIP-LoRA v1", "vone"), ("BLIP-LoRA v2", "vtwo")):
         if label in abl:
@@ -420,9 +454,11 @@ def latex_numbers(res: dict) -> str:
             prev = cyc.get(r["cycle"] - 1)
             if prev and prev["val"]:
                 n["prevVal"] = pct(prev["val"])
-        d = np.array(res["cycle_folds"][r["cycle"]]) - np.array(res["cycle_folds"][first["cycle"]])
-        h = T95[len(d) - 1] * d.std(ddof=1) / np.sqrt(len(d))
-        n.update(totalChange=pct(d.mean()), totalChangeLo=pct(d.mean() - h), totalChangeHi=pct(d.mean() + h))
+        t = paired(res["cycle_folds"][r["cycle"]], res["cycle_folds"][first["cycle"]])
+        n.update(totalChange=pct(t[0]), totalChangeLo=pct(t[1]), totalChangeHi=pct(t[2]))
+    if res.get("caption_change"):
+        c = res["caption_change"]
+        n.update(capChange=pct(c[0]), capChangeLo=pct(c[1]), capChangeHi=pct(c[2]), capChangeFolds=str(c[3]))
     n.update(tfourHours=f"{res['hours'].get('T4', 0):.0f}", proHours=f"{res['hours'].get('RTX PRO 5000', 0):.0f}")
     if res.get("constant"):
         c = res["constant"]
@@ -433,9 +469,6 @@ def latex_numbers(res: dict) -> str:
                  blipAccClear=pct(h["acc_clear"]), blipEce=f"{h['ece']:.2f}", blipAccAll=pct(h["acc_all"]))
     if "baseline" in hed:
         n["zeroAurc"] = f"{hed['baseline']['aurc']:.2f}"
-    if rob:
-        n.update(blipParaphraseDrop=pct(-rob["paraphrase"]), blipJpegDrop=pct(-rob.get("jpeg-10", 0.0)),
-                 blipBlurDrop=pct(-rob.get("blur-4", 0.0)))
     if "gap" in res.get("leakage", {}):
         g = res["leakage"]["gap"]
         n.update(leakGap=pct(g[0]), leakLo=pct(g[1]), leakHi=pct(g[2]), leakSeen=pct(res["leakage"]["seen-field"][0]),
@@ -458,12 +491,15 @@ def latex_numbers(res: dict) -> str:
             if r.get("caption_words"):
                 n[name + "Words"] = f"{r['caption_words']:.0f}"
                 n["referenceWords"] = f"{r['reference_words']:.0f}"
-    for key, name in (("archive/v1/robust-blip-lora", "vone"), ("robust-served-rgb", "servedRgb"), ("robust-served-ndvi", "servedNdvi")):
+    for key, name in ((f"robust-c{res['chosen']}", "blip"), ("robust-c2", "vtwo"), ("archive/v1/robust-blip-lora", "vone"),
+                      ("robust-served-rgb", "servedRgb"), ("robust-served-ndvi", "servedNdvi")):
         r = res["robustness"].get(key, {})
-        if "paraphrase" in r:
-            n[name + "ParaphraseDrop"] = pct(-r["paraphrase"])
+        n.update({name + s + "Drop": pct(-r[v]) for v, s in ROBUST_DROPS.items() if v in r})
         if "jpeg-10" in r:
-            n[name + "JpegDrop"] = pct(-r["jpeg-10"])
+            n.update({name + "JpegAcc": pct(r["clean"] + r["jpeg-10"]), name + "RobustClean": pct(r["clean"]),
+                      name + "Perturbed": pct(-np.mean([v for k, v in r.items() if k not in ("clean", "paraphrase")]))})
+    for name, r in res.get("robustness_shared", {}).items():
+        n.update({name + "Mid" + s: pct(-r[v]) for v, s in ROBUST_MID.items() if v in r})
     for key, name in (("archive/v1/blip-lora", "voneLoc"), ("blip-lora", "vtwoLoc"), (res["final"], "blipLoc"), ("balanced", "balLoc")):
         s = res.get("location_split", {}).get(key)
         if s:
@@ -574,6 +610,9 @@ def main():
                "ablation": table_ablation(a.runs, final), "per_class": table_per_class(a.runs, ("baseline", final, *served)),
                "fold0": table_fold0(a.runs, final), "hedging": table_hedging(a.runs, ("baseline", final, *served, "dora")),
                "hedge_rule": table_hedge_rule(a.runs, final), "robustness": table_robustness(a.runs),
+               "robustness_shared": robustness_shared(a.runs),
+               "caption_change": paired(fact_f1s(a.runs, final), fact_f1s(a.runs, f"c{chosen}-blip"))
+               if len(fact_f1s(a.runs, final)) == len(fact_f1s(a.runs, f"c{chosen}-blip")) == 5 else None,
                "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs, chosen), "cost": table_cost(a.runs), "hours": hours_by_gpu(a.runs),
                "sweep": sweep_scores(a.runs), "captions": table_caption_examples(a.runs, final),
                "location_split": table_location_split(a.runs, ("archive/v1/blip-lora", "blip-lora", final, "balanced"))}

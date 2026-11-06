@@ -489,3 +489,26 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
   - Waiting for fold 0 (about 15 more hours at 25 pairs/s while three runs share the GPU) would leave most of the GPU idle once the captions finish.
   - Folds 1–3 (`pipeline-11..13`) start when the final stage exits. Fold 4 (`pipeline-14`) starts when fold 0's run exits. Four runs at about 9 GB each stay under 40 GB.
 - **Stop signal kept.** If fold 0's best second-half validation ends at or below cycle 5's 70.7, the other cycle-6 runs are stopped and cycle 5 stays final.
+
+## 2026-11-06 07:35: captions held out on all five folds, and length costs robustness
+
+- **480k captions, five folds.** Held out with the cycle-5 VQA adapters, every fold's VQA rows match `c5-blip` exactly. Fact F1 goes from 76.8 to 80.4, a fold-paired change of +3.6 [+1.2, +6.0], up on 5/5 folds. CIDEr rises from 3.49 to 3.86, also 5/5. BLEU-4 and ROUGE-L rise on 4/5. The record is `c5-capc4-blip`, the final model.
+- **The final stage ran.** `robust-c5` and `heatmaps-c5` are on the Hub, and no report macro is left without a record.
+  - Pointing game: the attention peak lands inside the anomaly in 56.3% of cases, against 48.0% for the first cycle's adapter, 39.3% zero-shot and 33.1% by chance.
+- **Robustness by length.** To separate length from the second cycle's data fixes, `robust-c2..4` scored the cycle 2–4 fold-0 adapters on the same 500 tiles and questions.
+  - In the table, "Mean, image" is the greedy accuracy change averaged over the 17 image perturbations. "JPEG q10" and "Blur 4" give the change at the strongest JPEG and blur, and "Paraphrase" the change on reworded questions.
+
+  | Run | Pairs | Clean | Mean, image | JPEG q10 | Blur 4 | Paraphrase |
+  |---|---|---|---|---|---|---|
+  | v1 | 120k | 71.6 | −3.9 | −14.4 | −9.5 | −11.3 |
+  | c2 | 120k | 71.9 | −3.9 | −14.5 | −11.4 | −10.7 |
+  | c3 | 240k | 74.3 | −4.9 | −19.6 | −12.0 | −9.4 |
+  | c4 | 480k | 74.7 | −5.0 | −21.4 | −11.9 | −9.0 |
+  | c5 | 960k | 75.3 | −6.9 | −24.8 | −15.6 | −8.3 |
+
+  - The image drop grows with every doubling. v1 and c2 match at the same length, so the fragility follows length, not the data fixes.
+  - At JPEG q10, c5 scores 50.5% against c2's 57.4%. Averaged over the image perturbations, c5's absolute accuracy (68.4) is barely above c2's (68.0) and below c4's (69.7).
+  - The paraphrase drop shrinks with length. Twelve templates alone bought 0.6 points (v1 → c2), so the report no longer credits them with the gain.
+  - This is one fold and one seed per cycle, but the trend is monotone across four points.
+- **Report corrected.** It now carries a length-costs-robustness paragraph and a "Perturbed images" column in the cycles table. The Qwen comparison was rewritten from the second-cycle records. Its stale claim was "NDVI most sensitive, 5–6 points"; on the same 200 tiles Qwen now loses less than BLIP to image damage. The flip and rotation claims are now numbers, and the abstract and conclusion say what length cost.
+- **Next.** Training uses no image augmentation, so the obvious test is a 480k fold-0 run trained on perturbed copies, compared with `c4-vqa-f0` on clean validation, held-out fold 0 and the robustness suite. It needs a GPU slot. Four cycle-6 runs hold about 35 GB now, so it waits for one to finish or for the cycle-6 stop signal.

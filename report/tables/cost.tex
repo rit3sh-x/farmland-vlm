@@ -1,14 +1,20 @@
-\begin{tabular}{lrrr}
+\begin{tabular}{lrrlr}
 \toprule
-Runs & Count & Trainable params (M) & T4 GPU-hours \\
+Runs & Count & Trainable params (M) & GPU & GPU-hours \\
 \midrule
-BLIP VQA LoRA, 5 folds & 2 & 11.8 & 2.5 \\
-BLIP caption LoRA, 5 folds & 1 & 7.1 & 1.8 \\
-BLIP sweeps, 20 trials & 20 & -- & 3.3 \\
-Leakage model (official split) & 1 & 11.8 & 2.2 \\
-BLIP VQA DoRA, fold 0 & 1 & 11.9 & 2.4 \\
-Served bake-off, 4 runs & 4 & -- & 6.6 \\
-Qwen3.5-2B LoRA, RGB & 1 & 16.8 & 7.4 \\
-Qwen3.5-2B LoRA, RGB + NDVI & 1 & 16.8 & 15.8 \\
+BLIP VQA LoRA, 5 folds & 5 & 11.8 & T4 & 10.7 \\
+BLIP caption LoRA, 5 folds & 5 & 7.1 & T4 & 8.6 \\
+BLIP sweeps, 20 trials & 20 & -- & T4 & 3.3 \\
+Leakage model (official split) & 1 & 11.8 & T4 & 2.2 \\
+BLIP VQA DoRA, fold 0 & 1 & 11.9 & T4 & 2.4 \\
+Served bake-off, 4 runs & 4 & -- & T4 & 6.6 \\
+Qwen3.5-2B LoRA, RGB & 2 & 16.8 & T4 & 14.5 \\
+Qwen3.5-2B LoRA, RGB + NDVI & 2 & 16.8 & RTX PRO 5000 / T4 & 20.0 \\
+BLIP study, fold 0 & 31 & -- & RTX PRO 5000 & 20.1 \\
+BLIP VQA cycle 3, 240k pairs & 5 & 11.8 & RTX PRO 5000 & 11.7 \\
+BLIP VQA cycle 4, 480k pairs & 5 & 11.8 & RTX PRO 5000 & 20.0 \\
+BLIP VQA cycle 5, 960k pairs & 5 & 11.8 & RTX PRO 5000 & 39.6 \\
+BLIP VQA cycle 6, 1,920k pairs & 1 & 11.8 & RTX PRO 5000 & 4.3 \\
+BLIP caption LoRA, 480k pairs & 5 & 7.1 & RTX PRO 5000 & 14.5 \\
 \bottomrule
 \end{tabular}
