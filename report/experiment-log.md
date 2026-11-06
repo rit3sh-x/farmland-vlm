@@ -569,3 +569,23 @@ Both use only the cycle-5 adapters' validation records (each fold's best check, 
 - **Why length again.** Every capacity knob tried at 30k to 120k pairs (rank 128 and 256, all_linear, alpha 4×) gave faster convergence, not a higher ceiling; length is the one change that has kept raising held-out scores. The fit check above shows fold 0 still underfits its own training tiles at 960k. Cycle 6 fold 0 validated 71.8 against cycle 5's 70.7: a smaller step than cycle 4 to 5 (+2.9), but still up.
 - **What.** Cycle 7 trains the cycle-2 recipe at 3.84M pairs on fold 0, in the slot cycle 6 fold 1 frees (about 21:00). At about 33 pairs/s on the shared card this is about 32 hours.
 - **Rule, fixed now.** Folds 1 to 4 follow only if cycle 7 fold 0's best validation beats cycle 6 fold 0's 71.8. The selection rule is unchanged and simply sees one more cycle: of the cycles trained on all five folds, the highest mean validation wins. Held-out scores never choose.
+
+## 2026-11-06 21:40: augmentation removes most of the fragility at cycle 4, with no held-out cost
+
+| Fold 0, 480k pairs | Plain (`c4`) | Augmented (`aug-c4`) |
+|---|---|---|
+| Best validation (ranked) | 67.8 | 66.9 |
+| Held out, ranked / greedy | 72.6 / 70.5 | 72.7 / 70.5 |
+| Robustness tiles, clean (greedy) | 74.7 | 75.6 |
+| Mean change, 17 image perturbations | −5.0 | −1.2 |
+| JPEG 10 / blur 4 / noise 30 / one-sixth resolution | −21.4 / −11.9 / −6.3 / −10.4 | −8.1 / −2.1 / −2.3 / −1.5 |
+| Paraphrased questions | −9.0 | −6.8 |
+
+- **Paired held-out change**, greedy item credit, augmented minus plain: +0.0 (95% CI −0.6 to 0.7, fields resampled). The pre-registered criterion (image drop shrinks, clean cost inside about 1 point) is met.
+- **Validation is 0.9 lower** while held out does not move. Augmented training sees clean images half as often, and the validation tiles are clean. A gap this size sits inside fold-to-fold noise, but it counts against augmentation under the selection rule, which reads validation only.
+- **Caveat.** The training perturbations are the suite's own kinds, so the robustness gain is an upper bound for unfamiliar damage.
+- **Decision.** The cycle-7 probe stays plain, so its length question is not confounded. A new `augment6` stage trains cycle 6's fold-0 recipe (1.92M pairs) with the same augmentation, against `c6-vqa-f0` (validation 71.8). It answers two questions:
+  - Does robustness stay nearly free at the final length?
+  - Does augmentation narrow the train/held-out gap, which grew from 2.9 to 6.2 points with length?
+- **Rule, fixed now.** If `aug-c6` matches `c6` on held-out fold 0 (paired CI covers 0 or is above it) and its image drop is under half of `robust-c6`'s, the robustness section reports the augmented model as the deployable variant beside the selected one. The headline stays the validation-chosen plain cycle unless a five-fold augmented run beats it on validation.
+- **Cycle 6 validation so far** (folds 0–3): 71.8, 74.2, 74.1, 74.9, against cycle 5's 70.7, 72.4, 72.7, 72.0. Fold 4 lands around noon tomorrow.

@@ -148,6 +148,15 @@ Caption: ``Large drydown throughout the tile, with small weed cluster at the top
 \end{itemize}
 \end{frame}
 
+\begin{frame}{Augmentation removes most of the fragility}
+\begin{itemize}
+\item Cycle 4's fold-0 recipe retrained with half the training images damaged at random by the suite's own perturbation kinds.
+\item Mean change over image perturbations: $-$\cFourPerturbed\ without, $-$\augFourPerturbed\ with. JPEG 10: $-$\cFourJpegDrop\ to $-$\augFourJpegDrop. Blur: $-$\cFourBlurDrop\ to $-$\augFourBlurDrop.
+\item No clean cost on held-out fold 0: \augFourHeld\ points (95\% CI \augFourHeldLo\ to \augFourHeldHi). Validation \augFourVal\ against \augFourPlainVal.
+\item Same perturbation kinds as the test, so an upper bound for unfamiliar damage.
+\end{itemize}
+\end{frame}
+
 \begin{frame}{Does the official split leak?}
 \begin{columns}
 \column{0.45\textwidth}

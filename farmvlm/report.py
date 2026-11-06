@@ -369,6 +369,18 @@ def table_robustness(runs: Path) -> dict:
     return res
 
 
+def table_augment(runs: Path) -> dict:
+    """Augmented against plain training at one cycle's fold-0 recipe: best validation of each, and the paired held-out
+    change in greedy item credit (augmented minus plain, field bootstrap)."""
+    out = {}
+    for c in (4, 6):
+        done = [runs / f"{r}-vqa-f0" / "done.json" for r in (f"c{c}", f"aug-c{c}")]
+        if all(d.exists() for d in done) and (runs / f"aug-c{c}-blip" / "f0.jsonl").exists():
+            ca, cb, g = aligned(runs, f"aug-c{c}-blip", f"c{c}-blip")
+            out[c] = {"val": [json.loads(d.read_text())["best_val"] for d in done], "held_diff": grouped_bootstrap(ca, g, other=cb)}
+    return out
+
+
 def robustness_shared(runs: Path) -> dict:
     """Accuracy change from clean for the chosen cycle's BLIP and both Qwen variants, on the 200 tiles Qwen was scored on."""
     dirs = {"blip": runs / f"robust-c{chosen_cycle(runs)}", "servedRgb": runs / "robust-served-rgb",
@@ -507,7 +519,8 @@ MACROS = tuple("""blipMean blipMeanStd blipGreedy blipGreedyStd blipPartial blip
     balLocLocalised locNThroughout locNLocalised balLocDrop referenceWords blipFoldWords voneFoldWords""".split()) + tuple(
     name + s for _, name in FOLD0_MACROS for s in ("Mean", "Pooled", "Presence", "Location", "FactF", "Precision", "Recall", "Diff")
     if name != "blipFold" or s != "Diff") + tuple(
-    m + s for m in ("blip", "vtwo", "vone") for s in [d + "Drop" for d in ROBUST_DROPS.values()] + ["JpegAcc", "RobustClean", "Perturbed"]) + (
+    m + s for m in ("blip", "vtwo", "vone", "cFour", "augFour") for s in [d + "Drop" for d in ROBUST_DROPS.values()] + ["JpegAcc", "RobustClean", "Perturbed"]) + (
+    "augFourVal", "augFourPlainVal", "augFourHeld", "augFourHeldLo", "augFourHeldHi",
     "capChange", "capChangeLo", "capChangeHi", "capChangeFolds", "blipCorrMean", "blipCorrMeanStd", "corrChange", "corrChangeLo",
     "corrChangeHi", "corrChangeFolds", "corrIdentify", "corrValChange", "corrValLo", "corrValHi", "corrValFolds", "corrNdTrue", "corrNdSaid", "fitTrain", "fitHeld", "fitGap", "fitClear", "fitAmbig", "fitExtent", "fitLocation",
     "fitPresence", "fitTwoTrain", "fitTwoHeld", "fitTwoGap",
@@ -559,6 +572,10 @@ def latex_numbers(res: dict) -> str:
         n.update(fitTrain=pct(r["train"]), fitHeld=pct(r["held"]), fitGap=pct(r["train"] - r["held"]), fitClear=pct(r["train_clear"]),
                  fitAmbig=pct(r["train_ambiguous"]), **{"fit" + f.capitalize(): pct(r["train_by_family"][f])
                                                        for f in ("presence", "extent", "location")})
+    if 4 in res.get("augment", {}):
+        r = res["augment"][4]
+        n.update(augFourVal=pct(r["val"][1]), augFourPlainVal=pct(r["val"][0]), augFourHeld=pct(r["held_diff"][0]),
+                 augFourHeldLo=pct(r["held_diff"][1]), augFourHeldHi=pct(r["held_diff"][2]))
     if 2 in fit:
         n.update(fitTwoTrain=pct(fit[2]["train"]), fitTwoHeld=pct(fit[2]["held"]), fitTwoGap=pct(fit[2]["train"] - fit[2]["held"]))
     if res.get("undercalled") and res["undercalled"][0]:
@@ -599,7 +616,8 @@ def latex_numbers(res: dict) -> str:
                 n[name + "Words"] = f"{r['caption_words']:.0f}"
                 n["referenceWords"] = f"{r['reference_words']:.0f}"
     for key, name in ((f"robust-c{res['chosen']}", "blip"), ("robust-c2", "vtwo"), ("archive/v1/robust-blip-lora", "vone"),
-                      ("robust-served-rgb", "servedRgb"), ("robust-served-ndvi", "servedNdvi")):
+                      ("robust-served-rgb", "servedRgb"), ("robust-served-ndvi", "servedNdvi"),
+                      ("robust-c4", "cFour"), ("robust-aug-c4", "augFour")):
         r = res["robustness"].get(key, {})
         n.update({name + s + "Drop": pct(-r[v]) for v, s in ROBUST_DROPS.items() if v in r})
         if "jpeg-10" in r:
@@ -721,7 +739,7 @@ def main():
                "caption_change": paired(fact_f1s(a.runs, final), fact_f1s(a.runs, f"c{chosen}-blip"))
                if len(fact_f1s(a.runs, final)) == len(fact_f1s(a.runs, f"c{chosen}-blip")) == 5 else None,
                "prior": prior_heldout(a.runs, chosen, final), "prior_validation": prior_validation(a.runs, chosen),
-               "undercalled": undercalled(a.runs, chosen), "fit": table_fit(a.runs),
+               "undercalled": undercalled(a.runs, chosen), "fit": table_fit(a.runs), "augment": table_augment(a.runs),
                "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs, chosen), "cost": table_cost(a.runs), "hours": hours_by_gpu(a.runs),
                "sweep": sweep_scores(a.runs), "captions": table_caption_examples(a.runs, final),
                "location_split": table_location_split(a.runs, ("archive/v1/blip-lora", "blip-lora", final, "balanced"))}

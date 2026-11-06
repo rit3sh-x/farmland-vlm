@@ -5,7 +5,7 @@ from its last pushed checkpoint.
     HF_TOKEN=... python scripts/pipeline.py --stats /content/stats.npz --root /content/av/Agriculture-Vision-2021
     python scripts/pipeline.py ... --only baseline sweep
 
-Stages: baseline sweep bakeoff blip robustness heatmaps leakage dora balanced study study2 captions4 cycle3-cycle7 final augment served
+Stages: baseline sweep bakeoff blip robustness heatmaps leakage dora balanced study study2 captions4 cycle3-cycle7 final augment augment6 served
 export served-robustness.
 """
 import argparse
@@ -280,16 +280,19 @@ def main():
                  "--caption-adapter", RUNS / "c4-caption-f{fold}" / "best", marker=f"f{a.folds[-1]}.json")
         evaluate(f"train-c{c}", a, "eval_blip.py", "--suite", "train", "--folds", 0, "--vqa-adapter", adapter(f"c{c}-vqa-f0"),
                  "--caption-adapter", adapter("c4-caption-f0"), marker="train-f0.json")  # how well it fits tiles it trained on
-    # Robustness by length (robust-c2..c5): the image drop grows with every doubling, and training damages no images. Cycle
-    # 4's fold-0 recipe with half the training images damaged at random (the draws match c4-vqa-f0's), scored against it on
-    # validation, held-out fold 0 and the robustness suite.
-    if want("augment"):
-        train_blip("aug-c4-vqa-f0", a, "vqa", fold=0, **CYCLE4, augment=0.5, eval_every=CYCLE4["pairs"] // 6,
+    # Robustness by length (robust-c2..c5): the image drop grows with every doubling, and training damages no images. A
+    # cycle's fold-0 recipe with half the training images damaged at random (the draws match the plain run's), scored
+    # against it on validation, held-out fold 0 and the robustness suite. At cycle 4 the mean image drop fell from 5.0 to
+    # 1.2 points with held-out fold 0 unchanged; cycle 6 asks whether that holds where the train-held-out gap is wider.
+    for c, recipe, stage in (("c4", CYCLE4, "augment"), ("c6", CYCLE6, "augment6")):
+        if not want(stage):
+            continue
+        train_blip(f"aug-{c}-vqa-f0", a, "vqa", fold=0, **recipe, augment=0.5, eval_every=recipe["pairs"] // 6,
                    val_tiles=STUDY_VAL_TILES, val_protocol="test", select="ranked", patience=99)
-        evaluate("aug-c4-blip", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", adapter("aug-c4-vqa-f0"),
+        evaluate(f"aug-{c}-blip", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", adapter(f"aug-{c}-vqa-f0"),
                  "--caption-adapter", adapter("c4-caption-f0"), marker="f0.json")
-        evaluate("robust-aug-c4", a, "eval_blip.py", "--suite", "robustness", "--folds", 0, "--vqa-adapter",
-                 adapter("aug-c4-vqa-f0"), "--caption-adapter", adapter("c4-caption-f0"), marker="f0-rot90-None.json")
+        evaluate(f"robust-aug-{c}", a, "eval_blip.py", "--suite", "robustness", "--folds", 0, "--vqa-adapter",
+                 adapter(f"aug-{c}-vqa-f0"), "--caption-adapter", adapter("c4-caption-f0"), marker="f0-rot90-None.json")
     if want("served"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
         extra = ["--vision"] if b["merged_route"] else []
