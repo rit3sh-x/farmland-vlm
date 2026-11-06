@@ -529,3 +529,13 @@ Cycle 3 (the cycle-2 recipe at 240k pairs) against cycle 2 (120k), on every fold
   - The gain is +1.1 on fold 0 against cycle 4 → 5's +2.9, so returns are shrinking.
 - **No held-out look.** `c6-blip` fold 0 is being scored now, but its file is not read until the five-fold validation rule picks a cycle.
 - **Next.** Folds 1–3 are at about 1.32M pairs and finish around 21:00. The augmentation run starts once fold 0's held-out scoring exits, and fold 4 follows it.
+
+## 2026-11-06 16:35: two readout corrections tested on validation; one is adopted before its held-out read
+
+Both use only the cycle-5 adapters' validation records (each fold's best check, the held-out sampling rules). No held-out file was read.
+
+- **Margin hedging loses.** Hedging between the top two answers when their probabilities are within δ costs 1.0 points at δ = 0.05 and more beyond, 0/5 folds up. A committed answer is the better bet, as the hedging table already suggested.
+- **Identify under-calls nutrient deficiency.** Over the five validation sets it is the true identify answer 1,353 times and the ranked answer 481 times. It is the runner-up in 204 misses behind "none" and 148 behind "planter skip". Training draws are balanced, while validation and test follow the held-out rules, where common classes fill the sample. This is label shift.
+- **Correction.** Per family and answer, ratio = (times answered + 1) / (times true + 1) on validation. The top two answers' probabilities are divided by ratio^w, and the larger wins. w is chosen per family from {0, 0.5, 1, 2, 3, 5} on the same validation rows. This is the label-shift adjustment of Saerens et al. (2002), estimated from the readout's own confusion in the spirit of Lipton et al. (2018).
+- **Validation evidence.** Fitted on one field-grouped half of a fold's own validation and scored on the other half, both ways: **+1.8** on the four-question mean, **5/5 folds up**, smallest gain +1.3. All of it is identify (+7.4); the other families pick w = 0 or nearly so. Pooling other folds' validation was rejected, because their validation tiles can sit in this fold's test fold.
+- **Rule, fixed now.** The corrected readout becomes the headline readout if its split-half validation change is positive on at least 4/5 folds. It is (5/5). For the held-out read, each fold's ratios and weights are fitted on that fold's whole validation set, then applied once to its stored held-out top-two answers. The held-out result is reported whatever it is, beside the plain ranked readout.
