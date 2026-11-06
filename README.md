@@ -58,7 +58,7 @@ Tests and the demo, locally:
 
 ```sh
 uv venv && uv pip install -e ".[dev,app]" && .venv/bin/python -m pytest -q
-HF_TOKEN=$(cat ~/.config/farmvlm/hf_token) .venv/bin/python scripts/laptop_setup.py --served lfm-450m
+HF_TOKEN=$(cat ~/.config/farmvlm/hf_token) .venv/bin/python scripts/laptop_setup.py --served qwen35-2b
 (cd app/web && npm install && npm run build)
 .venv/bin/uvicorn app.backend.main:app --host 127.0.0.1 --port 8000   # then open http://127.0.0.1:8000
 ```

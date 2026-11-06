@@ -1,7 +1,7 @@
 """Put everything the laptop demo needs into ~/.cache/farmvlm: llama.cpp binaries, the served model's base GGUF
 and projector, and the trained adapters from the private runs repo.
 
-    HF_TOKEN=$(cat ~/.config/farmvlm/hf_token) python scripts/laptop_setup.py --served lfm-450m
+    HF_TOKEN=$(cat ~/.config/farmvlm/hf_token) python scripts/laptop_setup.py --served qwen35-2b
 """
 import argparse
 import io
@@ -61,7 +61,7 @@ def adapters():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--served", choices=list(GGUF), default="lfm-450m")
+    ap.add_argument("--served", choices=list(GGUF), default="qwen35-2b")
     a = ap.parse_args()
     HOME.mkdir(parents=True, exist_ok=True)
     llama()
