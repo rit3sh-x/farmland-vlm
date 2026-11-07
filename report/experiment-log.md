@@ -618,3 +618,24 @@ Both use only the cycle-5 adapters' validation records (each fold's best check, 
 - **Decision.** The robustness section reports `aug-c6` as the deployable variant beside the selected model. The headline stays plain cycle 6, which validation chose; the augmented recipe has one fold, and its validation is 0.6 lower (the same sign as at cycle 4).
 - **Plain cycle 6 is the most fragile model yet** (−6.5 against cycle 4's −5.0), so the gap augmentation closes grows with length.
 - **Still open.** Whether augmentation narrows the train/held-out gap. `train-aug-c6` (the training-tile suite on the augmented adapter) is added to the `augment6` stage and compared with `train-c6` once the final stage scores it.
+
+## 2026-11-07 10:05: cycle 6 held out; returns from length are shrinking
+
+| Held out, five folds | Cycle 5 | Cycle 6 | Fold-paired change |
+|---|---|---|---|
+| Ranked readout | 73.1 | 74.0 ± 1.3 | +0.9 (0.2 to 1.7), 5/5 folds |
+| Label-shift corrected (headline) | 74.6 | 74.8 ± 1.2 | +0.3 (−0.4 to 0.9), 3/5 folds |
+
+- **The validation step overstates the held-out one.** Validation rose 1.9 over the last doubling; held out rose 0.9 ranked and 0.3 corrected. Validation tiles are field-disjoint from training (asserted in `train_blip`), so this is not leakage. They carry the training folds' class mix, and the best of six checks is taken on 1,000 tiles.
+- **The correction now adds less** (+0.8, 0.5 to 1.1, against +1.5 at cycle 5): the longer model has learnt part of what it fixed.
+- **Fit, fold 0** (ranked, own training tiles against held out):
+
+  | | Train | Held out | Gap |
+  |---|---|---|---|
+  | Cycle 5 | 80.9 | 74.7 | 6.2 |
+  | Cycle 6 | 83.4 | 75.0 | 8.4 |
+  | Augmented cycle 6 | 82.7 | 75.2 | 7.6 |
+
+- **Reading the fit table.** Length now buys mostly seen-field fit. Augmentation narrows the gap by 0.8, mostly by fitting identify on seen tiles less (87.5 to 85.1). It is a mild regulariser, not a fix.
+- **Report.** Limitations gains the length-ceiling sentence; the `corrStep*` macros give the corrected step over the previous cycle. The robustness paragraph and the deck carry the cycle-6 augmentation result.
+- **Cycle 7.** The rule stands (folds 1–4 only if fold 0 validates above 71.8). Given the gap between the validation step and the held-out step, a pass on validation is a weak promise of a held-out gain.

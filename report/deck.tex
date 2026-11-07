@@ -243,6 +243,7 @@ Model + adapters in RAM & about 3 GB \\
 \item Cycle \finalCycle\ (\finalPairs): \textbf{\blipMean\%} held out, +\finalChange\ over the cycle before (\finalChangeLo\ to \finalChangeHi, \finalChangeFolds/5 folds), +\totalChange\ over cycle 2.
 \item Captions at 480k: fact F1 \vtwoFactF\% $\to$ \blipFactF\%.
 \item Training draws are balanced; the test is not. Correcting the ranking for that shift, fitted on validation (+\corrValChange, \corrValFolds/5 folds): \textbf{\blipCorrMean\%} held out, +\corrChange\ (\corrChangeLo\ to \corrChangeHi, \corrChangeFolds/5), all on identify.
+\item Corrected, cycle \finalCycle\ adds only \corrStep\ over the cycle before (\corrStepLo\ to \corrStepHi, \corrStepFolds/5): returns from length are shrinking.
 \end{itemize}
 \column{0.42\textwidth}
 \includegraphics[width=\textwidth]{figures/length_curve.pdf}

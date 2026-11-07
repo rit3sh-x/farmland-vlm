@@ -523,7 +523,7 @@ MACROS = tuple("""blipMean blipMeanStd blipGreedy blipGreedyStd blipPartial blip
     for s in [d + "Drop" for d in ROBUST_DROPS.values()] + ["JpegAcc", "RobustClean", "Perturbed"]) + tuple(
     "aug" + c + s for c in ("Four", "Six") for s in ("Val", "PlainVal", "Held", "HeldLo", "HeldHi")) + (
     "capChange", "capChangeLo", "capChangeHi", "capChangeFolds", "blipCorrMean", "blipCorrMeanStd", "corrChange", "corrChangeLo",
-    "corrChangeHi", "corrChangeFolds", "corrIdentify", "corrValChange", "corrValLo", "corrValHi", "corrValFolds", "corrNdTrue", "corrNdSaid", "fitTrain", "fitHeld", "fitGap", "fitClear", "fitAmbig", "fitExtent", "fitLocation",
+    "corrChangeHi", "corrChangeFolds", "corrStep", "corrStepLo", "corrStepHi", "corrStepFolds", "corrIdentify", "corrValChange", "corrValLo", "corrValHi", "corrValFolds", "corrNdTrue", "corrNdSaid", "fitTrain", "fitHeld", "fitGap", "fitClear", "fitAmbig", "fitExtent", "fitLocation",
     "fitPresence", "fitTwoTrain", "fitTwoHeld", "fitTwoGap",
     "servedRgbParaphraseDrop", "servedNdviParaphraseDrop") + tuple(
     m + "Mid" + s for m in ("blip", "servedRgb", "servedNdvi") for s in ROBUST_MID.values())
@@ -567,6 +567,9 @@ def latex_numbers(res: dict) -> str:
         n.update(blipCorrMean=pct(np.mean(p["after"])), blipCorrMeanStd=pct(np.std(p["after"], ddof=1)), corrChange=pct(c[0]),
                  corrChangeLo=pct(c[1]), corrChangeHi=pct(c[2]), corrChangeFolds=str(c[3]),
                  corrIdentify=pct(np.mean([f[FAMILIES.index("identify")] for f in p["after_by_family"]])))
+        if res.get("prior_prev"):  # the corrected readout, final cycle against the one before
+            s = paired(p["after"], res["prior_prev"]["after"])
+            n.update(corrStep=pct(s[0]), corrStepLo=pct(s[1]), corrStepHi=pct(s[2]), corrStepFolds=str(s[3]))
     fit = {r["cycle"]: r for r in res.get("fit", [])}
     if res["chosen"] in fit:
         r = fit[res["chosen"]]
@@ -740,6 +743,7 @@ def main():
                "caption_change": paired(fact_f1s(a.runs, final), fact_f1s(a.runs, f"c{chosen}-blip"))
                if len(fact_f1s(a.runs, final)) == len(fact_f1s(a.runs, f"c{chosen}-blip")) == 5 else None,
                "prior": prior_heldout(a.runs, chosen, final), "prior_validation": prior_validation(a.runs, chosen),
+               "prior_prev": prior_heldout(a.runs, chosen - 1, f"c{chosen - 1}-capc4-blip"),
                "undercalled": undercalled(a.runs, chosen), "fit": table_fit(a.runs), "augment": table_augment(a.runs),
                "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs, chosen), "cost": table_cost(a.runs), "hours": hours_by_gpu(a.runs),
                "sweep": sweep_scores(a.runs), "captions": table_caption_examples(a.runs, final),
