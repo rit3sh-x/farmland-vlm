@@ -24,9 +24,9 @@ CYCLES = (("blip-lora", 2, 120_000), ("c3-blip", 3, 240_000), ("c4-blip", 4, 480
 T95 = {1: 12.71, 2: 4.30, 3: 3.18, 4: 2.78}  # two-sided 95% t quantiles by degrees of freedom
 
 
-def cycle_validation(runs: Path, cycle: int) -> float | None:
+def cycle_validation(runs: Path, cycle: int, prefix: str = "c") -> float | None:
     """The selection score of a cycle: the mean over its five folds of each fold's best second-half validation check."""
-    done = [runs / f"c{cycle}-vqa-f{k}" / "done.json" for k in range(5)]
+    done = [runs / f"{prefix}{cycle}-vqa-f{k}" / "done.json" for k in range(5)]
     return float(np.mean([json.loads(p.read_text())["best_val"] for p in done])) if all(p.exists() for p in done) else None
 
 
@@ -118,12 +118,12 @@ def undercalled(runs: Path, cycle: int, family: str = "identify", answer: str = 
     return sum(r["truth"] == answer for r in rs), sum(r["ranked"] == answer for r in rs)
 
 
-def prior_heldout(runs: Path, cycle: int, name: str) -> dict | None:
+def prior_heldout(runs: Path, cycle: int, name: str, prefix: str = "c") -> dict | None:
     """Held-out four-question means per fold for the ranked readout and its label-shift correction, fitted on each
     fold's own validation rows, with the per-family change and the weights chosen."""
     out = {"before": [], "after": [], "after_by_family": [], "weights": []}
     for k in range(5):
-        val = best_val_rows(runs, f"c{cycle}-vqa-f{k}")
+        val = best_val_rows(runs, f"{prefix}{cycle}-vqa-f{k}")
         rs = [r for r in rows(runs / name / f"f{k}.jsonl") if r["family"] in FAMILIES]
         if not val or not rs:
             return None
@@ -369,6 +369,17 @@ def table_robustness(runs: Path) -> dict:
     return res
 
 
+def seventh_cycle(runs: Path) -> dict:
+    """Cycle 7 against cycle 6 on fold 0, the only fold cycle 7 trained on: best validation and held-out ranked mean."""
+    done = [runs / f"c{c}-vqa-f0" / "done.json" for c in (7, 6)]
+    if not all(d.exists() for d in done):
+        return {}
+    out = dict(zip(("sevenVal", "sixValZero"), (json.loads(d.read_text())["best_val"] for d in done)))
+    if (runs / "c7-blip" / "f0.json").exists():
+        out.update(sevenHeldZero=fold_means(runs, "c7-blip")[0], sixHeldZero=fold_means(runs, "c6-blip")[0])
+    return out
+
+
 def table_augment(runs: Path) -> dict:
     """Augmented against plain training at one cycle's fold-0 recipe: best validation of each, and the paired held-out
     change in greedy item credit (augmented minus plain, field bootstrap)."""
@@ -524,7 +535,9 @@ MACROS = tuple("""blipMean blipMeanStd blipGreedy blipGreedyStd blipPartial blip
     "aug" + c + s for c in ("Four", "Six") for s in ("Val", "PlainVal", "Held", "HeldLo", "HeldHi")) + (
     "capChange", "capChangeLo", "capChangeHi", "capChangeFolds", "blipCorrMean", "blipCorrMeanStd", "corrChange", "corrChangeLo",
     "corrChangeHi", "corrChangeFolds", "corrStep", "corrStepLo", "corrStepHi", "corrStepFolds", "corrIdentify", "corrValChange", "corrValLo", "corrValHi", "corrValFolds", "corrNdTrue", "corrNdSaid", "fitTrain", "fitHeld", "fitGap", "fitClear", "fitAmbig", "fitExtent", "fitLocation",
-    "fitPresence", "fitTwoTrain", "fitTwoHeld", "fitTwoGap",
+    "fitPresence", "fitTwoTrain", "fitTwoHeld", "fitTwoGap", "augFiveVal", "augFiveMean", "augFiveCorr", "augFiveCorrStd",
+    "augFiveChange", "augFiveChangeLo", "augFiveChangeHi", "augFiveChangeFolds", "sevenVal", "sixValZero", "sevenHeldZero",
+    "sixHeldZero",
     "servedRgbParaphraseDrop", "servedNdviParaphraseDrop") + tuple(
     m + "Mid" + s for m in ("blip", "servedRgb", "servedNdvi") for s in ROBUST_MID.values())
 
@@ -580,6 +593,13 @@ def latex_numbers(res: dict) -> str:
         k = "aug" + {4: "Four", 6: "Six"}[c]
         n.update({k + "Val": pct(r["val"][1]), k + "PlainVal": pct(r["val"][0]), k + "Held": pct(r["held_diff"][0]),
                   k + "HeldLo": pct(r["held_diff"][1]), k + "HeldHi": pct(r["held_diff"][2])})
+    if res.get("aug_folds") and res.get("prior") and res.get("aug_val"):  # the augmented recipe on all five folds
+        a, c = res["aug_folds"], paired(res["aug_folds"]["after"], res["prior"]["after"])
+        n.update(augFiveVal=pct(res["aug_val"]), augFiveMean=pct(np.mean(a["before"])), augFiveCorr=pct(np.mean(a["after"])),
+                 augFiveCorrStd=pct(np.std(a["after"], ddof=1)), augFiveChange=pct(c[0]), augFiveChangeLo=pct(c[1]),
+                 augFiveChangeHi=pct(c[2]), augFiveChangeFolds=str(c[3]))
+    if res.get("seven"):  # the seventh cycle, trained on fold 0 only
+        n.update({k: pct(v) for k, v in res["seven"].items()})
     if 2 in fit:
         n.update(fitTwoTrain=pct(fit[2]["train"]), fitTwoHeld=pct(fit[2]["held"]), fitTwoGap=pct(fit[2]["train"] - fit[2]["held"]))
     if res.get("undercalled") and res["undercalled"][0]:
@@ -745,6 +765,8 @@ def main():
                "prior": prior_heldout(a.runs, chosen, final), "prior_validation": prior_validation(a.runs, chosen),
                "prior_prev": prior_heldout(a.runs, chosen - 1, f"c{chosen - 1}-capc4-blip"),
                "undercalled": undercalled(a.runs, chosen), "fit": table_fit(a.runs), "augment": table_augment(a.runs),
+               "aug_folds": prior_heldout(a.runs, 6, "aug-c6-blip", prefix="aug-c"), "aug_val": cycle_validation(a.runs, 6, "aug-c"),
+               "seven": seventh_cycle(a.runs),
                "leakage": table_leakage(a.runs), "pointing": table_pointing(a.runs, chosen), "cost": table_cost(a.runs), "hours": hours_by_gpu(a.runs),
                "sweep": sweep_scores(a.runs), "captions": table_caption_examples(a.runs, final),
                "location_split": table_location_split(a.runs, ("archive/v1/blip-lora", "blip-lora", final, "balanced"))}
