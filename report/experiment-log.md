@@ -619,7 +619,7 @@ Both use only the cycle-5 adapters' validation records (each fold's best check, 
 - **Plain cycle 6 is the most fragile model yet** (−6.5 against cycle 4's −5.0), so the gap augmentation closes grows with length.
 - **Still open.** Whether augmentation narrows the train/held-out gap. `train-aug-c6` (the training-tile suite on the augmented adapter) is added to the `augment6` stage and compared with `train-c6` once the final stage scores it.
 
-## 2026-11-07 10:05: cycle 6 held out; returns from length are shrinking
+## 2026-11-07 09:45: cycle 6 held out; returns from length are shrinking
 
 | Held out, five folds | Cycle 5 | Cycle 6 | Fold-paired change |
 |---|---|---|---|
@@ -639,3 +639,18 @@ Both use only the cycle-5 adapters' validation records (each fold's best check, 
 - **Reading the fit table.** Length now buys mostly seen-field fit. Augmentation narrows the gap by 0.8, mostly by fitting identify on seen tiles less (87.5 to 85.1). It is a mild regulariser, not a fix.
 - **Report.** Limitations gains the length-ceiling sentence; the `corrStep*` macros give the corrected step over the previous cycle. The robustness paragraph and the deck carry the cycle-6 augmentation result.
 - **Cycle 7.** The rule stands (folds 1–4 only if fold 0 validates above 71.8). Given the gap between the validation step and the held-out step, a pass on validation is a weak promise of a held-out gain.
+
+## 2026-11-07 09:55: an offline ensemble fails validation; the augmented recipe goes to every fold
+
+- **Ensemble, validation only.** Each record keeps a model's two top ranked answers with their probabilities, so two adapters of one fold can be averaged offline (an answer outside a model's top two counts 0). Against cycle 6 alone, on the five validation sets (correction fitted on one field half, scored on the other):
+
+  | Ensemble | Ranked | Corrected |
+  |---|---|---|
+  | Cycles 5 + 6 | +0.24 (−0.16 to 0.65), 3/5 | +0.65 (−0.05 to 1.35), 4/5 |
+  | Cycles 4 + 5 + 6 | −0.51 (−1.33 to 0.31), 1/5 | +0.21 (−1.03 to 1.44), 3/5 |
+
+  The adoption bar was a fold-paired CI above 0, and neither clears it, so the held-out records were not read for these. The cycle-6-alone rows reproduce the selection score (73.39), so the offline readout matches training's.
+- **Augmented cycle 6 on folds 1 to 4.** With cycle 7 alone on the card at 84% use, three folds train now and fold 4 follows cycle 7's pipeline. The `augment6` stage now honours `--folds`.
+- **Rules, fixed now.**
+  - The 21:40 rule decides the headline. The augmented model replaces plain cycle 6 only if its five-fold mean validation beats 73.39. Otherwise it is reported beside the headline as the deployable variant, with its five-fold held-out score.
+  - A plain + augmented ensemble per fold is scored on validation first. It is adopted only under the bar above.

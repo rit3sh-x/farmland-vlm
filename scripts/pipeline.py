@@ -284,13 +284,17 @@ def main():
     # cycle's fold-0 recipe with half the training images damaged at random (the draws match the plain run's), scored
     # against it on validation, held-out fold 0 and the robustness suite. At cycle 4 the mean image drop fell from 5.0 to
     # 1.2 points with held-out fold 0 unchanged; cycle 6 asks whether that holds where the train-held-out gap is wider.
+    # It did (6.5 to 0.7, held out +0.2), so cycle 6's augmented model, the deployable variant, trains on every fold.
     for c, recipe, stage in (("c4", CYCLE4, "augment"), ("c6", CYCLE6, "augment6")):
         if not want(stage):
             continue
-        train_blip(f"aug-{c}-vqa-f0", a, "vqa", fold=0, **recipe, augment=0.5, eval_every=recipe["pairs"] // 6,
-                   val_tiles=STUDY_VAL_TILES, val_protocol="test", select="ranked", patience=99)
-        evaluate(f"aug-{c}-blip", a, "eval_blip.py", "--folds", 0, "--vqa-adapter", adapter(f"aug-{c}-vqa-f0"),
-                 "--caption-adapter", adapter("c4-caption-f0"), marker="f0.json")
+        for f in a.folds if c == "c6" else [0]:
+            train_blip(f"aug-{c}-vqa-f{f}", a, "vqa", fold=f, **recipe, augment=0.5, eval_every=recipe["pairs"] // 6,
+                       val_tiles=STUDY_VAL_TILES, val_protocol="test", select="ranked", patience=99)
+            evaluate(f"aug-{c}-blip", a, "eval_blip.py", "--folds", f, "--vqa-adapter", adapter(f"aug-{c}-vqa-f{f}"),
+                     "--caption-adapter", adapter(f"c4-caption-f{f}"), marker=f"f{f}.json")
+        if 0 not in a.folds:
+            continue
         evaluate(f"robust-aug-{c}", a, "eval_blip.py", "--suite", "robustness", "--folds", 0, "--vqa-adapter",
                  adapter(f"aug-{c}-vqa-f0"), "--caption-adapter", adapter("c4-caption-f0"), marker="f0-rot90-None.json")
         evaluate(f"train-aug-{c}", a, "eval_blip.py", "--suite", "train", "--folds", 0, "--vqa-adapter", adapter(f"aug-{c}-vqa-f0"),
