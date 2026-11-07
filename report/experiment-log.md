@@ -589,3 +589,16 @@ Both use only the cycle-5 adapters' validation records (each fold's best check, 
   - Does augmentation narrow the train/held-out gap, which grew from 2.9 to 6.2 points with length?
 - **Rule, fixed now.** If `aug-c6` matches `c6` on held-out fold 0 (paired CI covers 0 or is above it) and its image drop is under half of `robust-c6`'s, the robustness section reports the augmented model as the deployable variant beside the selected one. The headline stays the validation-chosen plain cycle unless a five-fold augmented run beats it on validation.
 - **Cycle 6 validation so far** (folds 0–3): 71.8, 74.2, 74.1, 74.9, against cycle 5's 70.7, 72.4, 72.7, 72.0. Fold 4 lands around noon tomorrow.
+
+## 2026-11-07 08:55: the rule chooses cycle 6
+
+| Best validation (ranked) | f0 | f1 | f2 | f3 | f4 | Mean |
+|---|---|---|---|---|---|---|
+| Cycle 4 (480k) | 67.8 | 71.2 | 69.7 | 71.4 | 67.5 | 69.5 |
+| Cycle 5 (960k) | 70.7 | 72.4 | 72.7 | 72.0 | 69.5 | 71.5 |
+| Cycle 6 (1.92M) | 71.8 | 74.2 | 74.1 | 74.9 | 71.9 | 73.4 |
+
+- **Decision.** `chosen_cycle` returns 6 (run on the workstation against its own run records; no held-out score was read first). Cycle 7 has one fold and is not yet eligible.
+- **Each doubling still pays the same.** Cycle 5 over 4 is +1.9 on the five-fold mean (every fold up, 0.6 to 3.0); cycle 6 over 5 is +1.9 again (every fold up, 1.2 to 2.9). The fold-0 step looked like it was shrinking (2.9, then 1.1); the other four folds say it is not.
+- **What that implies.** On this log-linear trend cycle 7 would validate near 75 and cycle 8 near 77. Reaching 98 this way would take about a dozen more doublings, so length alone cannot get there.
+- **Next.** The final stage (`pipeline-19`) runs `robust-c6`, `heatmaps-c6`, `c6-capc4-blip` on all five folds and `train-c6`. The headline and the length-ceiling sentence in Limitations wait for those.
