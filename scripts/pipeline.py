@@ -293,6 +293,8 @@ def main():
                  "--caption-adapter", adapter("c4-caption-f0"), marker="f0.json")
         evaluate(f"robust-aug-{c}", a, "eval_blip.py", "--suite", "robustness", "--folds", 0, "--vqa-adapter",
                  adapter(f"aug-{c}-vqa-f0"), "--caption-adapter", adapter("c4-caption-f0"), marker="f0-rot90-None.json")
+        evaluate(f"train-aug-{c}", a, "eval_blip.py", "--suite", "train", "--folds", 0, "--vqa-adapter", adapter(f"aug-{c}-vqa-f0"),
+                 "--caption-adapter", adapter("c4-caption-f0"), marker="train-f0.json")  # does augmentation narrow the fit gap?
     if want("served"):
         b = json.loads((RUNS / "bakeoff" / "bakeoff.json").read_text())
         extra = ["--vision"] if b["merged_route"] else []

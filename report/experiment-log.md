@@ -602,3 +602,19 @@ Both use only the cycle-5 adapters' validation records (each fold's best check, 
 - **Each doubling still pays the same.** Cycle 5 over 4 is +1.9 on the five-fold mean (every fold up, 0.6 to 3.0); cycle 6 over 5 is +1.9 again (every fold up, 1.2 to 2.9). The fold-0 step looked like it was shrinking (2.9, then 1.1); the other four folds say it is not.
 - **What that implies.** On this log-linear trend cycle 7 would validate near 75 and cycle 8 near 77. Reaching 98 this way would take about a dozen more doublings, so length alone cannot get there.
 - **Next.** The final stage (`pipeline-19`) runs `robust-c6`, `heatmaps-c6`, `c6-capc4-blip` on all five folds and `train-c6`. The headline and the length-ceiling sentence in Limitations wait for those.
+
+## 2026-11-07 09:40: augmentation holds at cycle 6's length; the augmented model is the deployable variant
+
+| Fold 0, 1.92M pairs | Plain (`c6`) | Augmented (`aug-c6`) |
+|---|---|---|
+| Best validation (ranked) | 71.8 | 71.3 |
+| Held out, ranked / greedy | 75.1 / 70.6 | 75.2 / 70.8 |
+| Robustness tiles, clean (greedy) | 74.4 | 75.3 |
+| Mean change, 17 image perturbations | −6.5 | −0.7 |
+| JPEG 10 / blur 4 / noise 30 / one-sixth resolution | −26.1 / −14.0 / −8.9 / −12.1 | −6.8 / −1.4 / −1.1 / −0.3 |
+| Paraphrased questions | −3.7 | −4.1 |
+
+- **Paired held-out change**, greedy item credit, augmented minus plain: +0.2 (95% CI −0.3 to 0.9, fields resampled). Both halves of the 21:40 rule hold: the CI covers 0, and the image drop (0.7) is far under half of plain's (6.5).
+- **Decision.** The robustness section reports `aug-c6` as the deployable variant beside the selected model. The headline stays plain cycle 6, which validation chose; the augmented recipe has one fold, and its validation is 0.6 lower (the same sign as at cycle 4).
+- **Plain cycle 6 is the most fragile model yet** (−6.5 against cycle 4's −5.0), so the gap augmentation closes grows with length.
+- **Still open.** Whether augmentation narrows the train/held-out gap. `train-aug-c6` (the training-tile suite on the augmented adapter) is added to the `augment6` stage and compared with `train-c6` once the final stage scores it.

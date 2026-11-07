@@ -153,6 +153,7 @@ Caption: ``Large drydown throughout the tile, with small weed cluster at the top
 \item Cycle 4's fold-0 recipe retrained with half the training images damaged at random by the suite's own perturbation kinds.
 \item Mean change over image perturbations: $-$\cFourPerturbed\ without, $-$\augFourPerturbed\ with. JPEG 10: $-$\cFourJpegDrop\ to $-$\augFourJpegDrop. Blur: $-$\cFourBlurDrop\ to $-$\augFourBlurDrop.
 \item No clean cost on held-out fold 0: \augFourHeld\ points (95\% CI \augFourHeldLo\ to \augFourHeldHi). Validation \augFourVal\ against \augFourPlainVal.
+\item At the final length (\finalPairs): $-$\cSixPerturbed\ without, $-$\augSixPerturbed\ with; held out \augSixHeld\ (95\% CI \augSixHeldLo\ to \augSixHeldHi). Reported as the deployable variant.
 \item Same perturbation kinds as the test, so an upper bound for unfamiliar damage.
 \end{itemize}
 \end{frame}
