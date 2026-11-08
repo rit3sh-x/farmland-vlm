@@ -153,7 +153,7 @@ Caption: ``Large drydown throughout the tile, with small weed cluster at the top
 \item Cycle 4's fold-0 recipe retrained with half the training images damaged at random by the suite's own perturbation kinds.
 \item Mean change over image perturbations: $-$\cFourPerturbed\ without, $-$\augFourPerturbed\ with. JPEG 10: $-$\cFourJpegDrop\ to $-$\augFourJpegDrop. Blur: $-$\cFourBlurDrop\ to $-$\augFourBlurDrop.
 \item No clean cost on held-out fold 0: \augFourHeld\ points (95\% CI \augFourHeldLo\ to \augFourHeldHi). Validation \augFourVal\ against \augFourPlainVal.
-\item At the final length (\finalPairs): $-$\cSixPerturbed\ without, $-$\augSixPerturbed\ with; held out \augSixHeld\ (95\% CI \augSixHeldLo\ to \augSixHeldHi). Reported as the deployable variant.
+\item At the final length (\finalPairs): $-$\cSixPerturbed\ without, $-$\augSixPerturbed\ with; held out \augSixHeld\ (95\% CI \augSixHeldLo\ to \augSixHeldHi). Five folds: validation \augFiveVal\% vs \finalVal\%, so the headline stays plain; held out \augFiveCorr\%, \augFiveChange\ over the headline (\augFiveChangeLo\ to \augFiveChangeHi). Reported as the deployable variant.
 \item Same perturbation kinds as the test, so an upper bound for unfamiliar damage.
 \end{itemize}
 \end{frame}
@@ -243,7 +243,7 @@ Model + adapters in RAM & about 3 GB \\
 \item Cycle \finalCycle\ (\finalPairs): \textbf{\blipMean\%} held out, +\finalChange\ over the cycle before (\finalChangeLo\ to \finalChangeHi, \finalChangeFolds/5 folds), +\totalChange\ over cycle 2.
 \item Captions at 480k: fact F1 \vtwoFactF\% $\to$ \blipFactF\%.
 \item Training draws are balanced; the test is not. Correcting the ranking for that shift, fitted on validation (+\corrValChange, \corrValFolds/5 folds): \textbf{\blipCorrMean\%} held out, +\corrChange\ (\corrChangeLo\ to \corrChangeHi, \corrChangeFolds/5), all on identify.
-\item Corrected, cycle \finalCycle\ adds only \corrStep\ over the cycle before (\corrStepLo\ to \corrStepHi, \corrStepFolds/5): returns from length are shrinking.
+\item Corrected, cycle \finalCycle\ adds only \corrStep\ over the cycle before (\corrStepLo\ to \corrStepHi, \corrStepFolds/5): returns from length are shrinking. Cycle 7 (fold 0): validation \sevenVal\% vs \sixValZero\%, held out \sevenHeldZero\% vs \sixHeldZero\%.
 \end{itemize}
 \column{0.42\textwidth}
 \includegraphics[width=\textwidth]{figures/length_curve.pdf}

@@ -654,3 +654,18 @@ Both use only the cycle-5 adapters' validation records (each fold's best check, 
 - **Rules, fixed now.**
   - The 21:40 rule decides the headline. The augmented model replaces plain cycle 6 only if its five-fold mean validation beats 73.39. Otherwise it is reported beside the headline as the deployable variant, with its five-fold held-out score.
   - A plain + augmented ensemble per fold is scored on validation first. It is adopted only under the bar above.
+
+## 2026-11-08 07:40: cycle 7 and the five-fold augmented recipe both lose to plain cycle 6; the headline is final
+
+- **Cycle 7, fold 0, 3.84M pairs.** Best validation 69.6 against cycle 6's 71.8, so folds 1 to 4 never ran. Held out (ranked) 74.7 against 75.0. Its validation curve was still rising at the end (69.3 to 69.6 over the last check) but never reached cycle 6's, so doubling length again buys nothing at rank 64 and LR 2e-4. 25.6 GPU-hours.
+- **Augmented cycle 6, five folds.** Best validation per fold:
+
+  | Fold | 0 | 1 | 2 | 3 | 4 | Mean |
+  |---|---|---|---|---|---|---|
+  | Plain `c6` | 71.8 | 74.2 | 74.1 | 74.9 | 71.9 | 73.39 |
+  | Augmented `aug-c6` | 71.3 | 73.6 | 72.5 | 76.3 | 71.2 | 72.98 |
+
+  Under the 21:40 rule the headline stays plain cycle 6 (72.98 does not beat 73.39). Held out, the augmented model scores 75.0 corrected (74.1 ranked), +0.2 over the headline (95% CI −0.5 to 0.8, 3/5 folds up). It stays the deployable variant, now with five folds behind it.
+- **Plain + augmented ensemble, validation only.** Against cycle 6 alone: ranked +0.49 (−0.11 to 1.08), 4/5; corrected +0.64 (−0.33 to 1.60), 4/5. Both CIs cover 0, so it is not adopted and its held-out records were not read. Augmented alone on the same readout: corrected −0.14 (−1.87 to 1.58).
+- **Regularisation at length is closed.** Augmentation is the strongest regulariser tried and it ties at five folds, so the dropout probe at full length is not run.
+- **Report.** The robustness paragraph and the deck carry the `augFive*` macros; Limitations and the length slide carry the cycle 7 result (`sevenVal`, `sixValZero`, `sevenHeldZero`, `sixHeldZero`).
