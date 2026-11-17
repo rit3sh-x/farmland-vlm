@@ -1,0 +1,13 @@
+% Written by scripts/figures.py from the run records.
+\begin{tikzpicture}
+\begin{groupplot}[chart, group style={group size=2 by 1, horizontal sep=0.27\figW}, width=0.24\figW, height=0.84\figH]
+\nextgroupplot[xmajorgrids, ymajorgrids=false, y dir=reverse, enlarge y limits={abs=0.6}, xtick distance=0.05, xbar=0pt, bar width=0.65, ytick={0,...,17}, yticklabels={{JPEG quality 10},{blur, radius 4},{JPEG quality 20},{resolution / 6},{JPEG quality 50},{Gaussian noise, sd 30},{blur, radius 2},{resolution / 3},{Gaussian noise, sd 15},{unseen question wording},{resolution / 2},{brightness and contrast, 40\%},{blur, radius 1},{rotate 90$^\circ$},{Gaussian noise, sd 5},{horizontal flip},{brightness and contrast, 10\%},{brightness and contrast, 25\%}}, yticklabel style={font=\tiny}, xlabel={Accuracy change from clean (BLIP-LoRA, 500 tiles)}]
+\addplot[fill=mblip, draw=none, forget plot] coordinates {(-0.26146,0) (-0.13964,1) (-0.13474,2) (-0.12103,3) (-0.091069,4) (-0.088915,5) (-0.079123,6) (-0.071876,7) (-0.041128,8) (-0.037407,9) (-0.033882,10) (-0.012143,11) (-0.011359,12) (-0.0088132,13) (-0.0056796,14) (-0.0027419,15) (-0.0013709,16) (-0.00097924,17)};
+\draw[figmuted, line width=0.5pt] (0,-0.6) -- (0,17.6);
+\nextgroupplot[xmajorgrids, ymajorgrids=false, y dir=reverse, enlarge y limits={abs=0.6}, xtick distance=0.05, xbar=0pt, bar width=0.267, ytick={0,...,7}, yticklabels={{JPEG quality 20},{blur, radius 2},{resolution / 3},{Gaussian noise, sd 15},{unseen question wording},{rotate 90$^\circ$},{brightness and contrast, 25\%},{horizontal flip}}, xlabel={Accuracy change from clean (same 200 tiles)}, legend columns=3, legend style={at={(1,1.02)}, anchor=south east}, ]
+\addplot[fill=mblip, draw=none, area legend] coordinates {(-0.13209,0) (-0.077299,1) (-0.076321,2) (-0.050881,3) (-0.032779,4) (-0.013209,5) (-0.0044031,6) (-0.0024462,7)}; \addlegendentry{BLIP-LoRA}
+\addplot[fill=mrgb, draw=none, area legend] coordinates {(-0.039628,0) (-0.044031,1) (-0.021037,2) (-0.028376,3) (-0.069961,4) (-0.018591,5) (-0.023483,6) (-0.012231,7)}; \addlegendentry{Qwen3.5-2B LoRA, RGB}
+\addplot[fill=mndvi, draw=none, area legend] coordinates {(-0.022994,0) (-0.034247,1) (-0.019569,2) (0.0044031,3) (-0.041585,4) (0.008317,5) (-0.018591,6) (0.0097847,7)}; \addlegendentry{Qwen3.5-2B LoRA, RGB + NDVI}
+\draw[figmuted, line width=0.5pt] (0,-0.6) -- (0,7.6);
+\end{groupplot}
+\end{tikzpicture}

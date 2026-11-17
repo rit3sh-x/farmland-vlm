@@ -1,0 +1,8 @@
+% Written by scripts/figures.py from the run records.
+\begin{tikzpicture}
+\begin{axis}[chart, width=0.8\figW, height=0.8\figH, xmode=log, log basis x=2, xtick={120,240,480,960,1920}, xticklabels={{120k},{240k},{480k},{960k},{1920k}}, enlarge x limits=0.08, xlabel={Training pairs per fold}, ylabel={Mean over question types (\%)}, legend pos=south east]
+\addplot[mblip, line width=1.1pt, mark=*, mark size=1.4pt, error bars/.cd, y dir=both, y explicit, error bar style={line width=0.5pt}] coordinates {(120,68.06) +- (0,1.21) (240,70.21) +- (0,1.24) (480,71.52) +- (0,1.61) (960,73.11) +- (0,1.62) (1920,74.05) +- (0,1.35)}; \addlegendentry{Held out, ranked}
+\addplot[mrgb, line width=1.1pt, mark=*, mark size=1.4pt, error bars/.cd, y dir=both, y explicit, error bar style={line width=0.5pt}] coordinates {(120,66.77) +- (0,1.13) (240,68.76) +- (0,1.36) (480,69.59) +- (0,1.45) (960,70.21) +- (0,1.08) (1920,69.72) +- (0,1.28)}; \addlegendentry{Held out, greedy}
+\addplot[mndvi, line width=1.1pt, dashed, mark=square*, mark size=1.3pt, mark options={solid}] coordinates {(240,68.153) (480,69.508) (960,71.461) (1920,73.388)}; \addlegendentry{Validation (selection score)}
+\end{axis}
+\end{tikzpicture}

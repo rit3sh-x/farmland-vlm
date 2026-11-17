@@ -1,0 +1,135 @@
+import argparse
+import json
+import subprocess
+import time
+from functools import lru_cache
+from pathlib import Path
+
+import numpy as np
+
+from farmvlm import folds as F, hub
+from farmvlm.evalset import eval_items
+from farmvlm.evaluate import predict, summarise, write
+from farmvlm.images import SIZE, rgb_view
+from farmvlm.perturb import apply, remap, variants
+from farmvlm.scheme import VIEWS
+from farmvlm.stats import StatsTable
+
+ROBUST_TILES = 500
+
+
+def recipe(vqa_adapter, cap_adapter) -> dict:
+    r, inputs = {"vqa_base": "base", "cap_base": "base", "size": SIZE, "bands": "rgb"}, set()
+    for key, adapter in (("vqa_base", vqa_adapter), ("cap_base", cap_adapter)):
+        cfg = Path(adapter).parent / "config.json" if adapter else None
+        if cfg and cfg.exists():
+            c = json.loads(cfg.read_text())
+            r[key] = c.get("base", "base")
+            inputs.add((c.get("size", SIZE), c.get("bands", "rgb")))
+    assert len(inputs) <= 1, f"the two adapters were trained on different inputs: {inputs}"
+    if inputs:
+        r["size"], r["bands"] = inputs.pop()
+    return r
+
+
+def load_reader(vqa_adapter, cap_adapter, beams=1, r=None):
+    import torch
+    from peft import PeftModel
+    from transformers import BlipForConditionalGeneration, BlipForQuestionAnswering
+    from farmvlm.blip import BASES, BlipReader
+    r = r or recipe(vqa_adapter, cap_adapter)
+    vqa = BlipForQuestionAnswering.from_pretrained(BASES[r["vqa_base"]][0], dtype=torch.float16)
+    cap = BlipForConditionalGeneration.from_pretrained(BASES[r["cap_base"]][1], dtype=torch.float16)
+    if vqa_adapter:
+        vqa = PeftModel.from_pretrained(vqa, vqa_adapter).merge_and_unload()
+    if cap_adapter:
+        cap = PeftModel.from_pretrained(cap, cap_adapter).merge_and_unload()
+    return BlipReader(vqa=vqa.half().cuda().eval(), captioner=cap.half().cuda().eval(), beams=beams, size=r["size"],
+                      base=r["vqa_base"])
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--stats", type=Path, required=True)
+    ap.add_argument("--root", type=Path, required=True)
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--folds", type=int, nargs="+", default=[0, 1, 2, 3, 4])
+    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--vqa-adapter", help="path, may contain {fold}")
+    ap.add_argument("--caption-adapter", help="path, may contain {fold}")
+    ap.add_argument("--also-vqa-adapter", nargs="*", default=[],
+                    help="more VQA adapters (may contain {fold}) whose ranked scores are averaged with --vqa-adapter's")
+    ap.add_argument("--suite", choices=["clean", "robustness", "leakage", "validation", "train"], default="clean",
+                    help="validation: the fold's inner-validation items (train_blip's split and draw), where readouts are chosen; "
+                         "train: the held-out rules applied to the fold's training tiles, for the generalisation gap")
+    ap.add_argument("--val-tiles", type=int, default=1000)
+    ap.add_argument("--val-protocol", choices=["random", "test"], default="random", help="see train_blip.validation_items")
+    ap.add_argument("--batch", type=int, default=48)
+    ap.add_argument("--beams", type=int, default=1, help="beam search width for generated answers and captions (1: greedy)")
+    a = ap.parse_args()
+    a.out.mkdir(parents=True, exist_ok=True)
+    sha = subprocess.run(["git", "-C", str(Path(__file__).parent), "rev-parse", "--short", "HEAD"],
+                         capture_output=True, text=True).stdout.strip()
+    first = lambda p: p.format(fold=a.folds[0]) if p else None
+    rec = recipe(first(a.vqa_adapter), first(a.caption_adapter))
+    (a.out / "config.json").write_text(json.dumps({**{k: str(v) for k, v in vars(a).items()}, "commit": sha, "recipe": rec}))
+    t = StatsTable.load(a.stats)
+    fold = F.make_folds(t, a.seed)
+    field_of = lambda r: str(t.field[t.row_tile[r]])
+
+    @lru_cache(maxsize=8192)
+    def base(row):
+        ti = t.row_tile[row]
+        return rgb_view(a.root, t.split[ti], t.tile[ti], VIEWS[t.row_view[row]], rec["size"], rec["bands"])
+
+    def run(reader, items, name, image=base, heldout=False, ranked=False):
+        if (a.out / f"{name}.json").exists():
+            print(f"{name}: already scored", flush=True)
+            return
+        t0 = time.time()
+        rows = predict(reader, items, image, a.batch, heldout=heldout, ranked=ranked)
+        m = summarise(rows, ranked=ranked)
+        write(rows, m, a.out / name, field_of)
+        hub.push(a.out, a.out.name)
+        print(f"{name}: {len(items)} items {time.time() - t0:.0f}s acc {m['vqa_generated']['accuracy']:.3f}", flush=True)
+
+    if a.suite == "leakage":
+        reader = load_reader(a.vqa_adapter, a.caption_adapter, a.beams, rec)
+        train_fields = set(t.field[t.split == "train"])
+        val = np.flatnonzero(t.split == "val")
+        seen = np.array([t.field[i] in train_fields for i in val])
+        rng = np.random.default_rng(a.seed)
+        n = min(2000, seen.sum(), (~seen).sum())
+        for name, pool in (("seen-field", val[seen]), ("unseen-field", val[~seen])):
+            run(reader, eval_items(t, rng.choice(pool, n, replace=False), np.array([], int)), name)
+        return
+    for f in a.folds:
+        fmt = lambda p: p.format(fold=f) if p else None
+        reader = load_reader(fmt(a.vqa_adapter), fmt(a.caption_adapter), a.beams, rec)
+        if a.also_vqa_adapter:
+            from farmvlm.blip import Ensemble
+            reader = Ensemble([reader] + [load_reader(fmt(v), None, a.beams, rec) for v in a.also_vqa_adapter])
+        if a.suite == "validation":
+            from farmvlm.train_blip import validation_items
+            run(reader, validation_items(t, "folds", f, a.seed, a.val_tiles, a.val_protocol), f"val-f{f}", ranked=True)
+            continue
+        if a.suite == "train":
+            from farmvlm.train_blip import split_tiles
+            pool, _ = split_tiles(t, "folds", f, a.seed)
+            run(reader, eval_items(t, F.pick_test_sample(t, None, None, a.seed, pool=pool), F.clean_views(t, pool, a.seed)),
+                f"train-f{f}", ranked=True)
+            continue
+        tiles = F.pick_test_sample(t, fold, f, a.seed)
+        if a.suite == "clean":
+            run(reader, eval_items(t, tiles, F.clean_views(t, np.flatnonzero(fold == f), a.seed)), f"f{f}", ranked=True)
+            continue
+        items = eval_items(t, np.random.default_rng(a.seed).permutation(tiles)[:ROBUST_TILES], np.array([], int))
+        run(reader, items, f"f{f}-clean")
+        run(reader, items, f"f{f}-paraphrase", heldout=True)
+        for kind, s in variants():
+            run(reader, [remap(i, kind) for i in items], f"f{f}-{kind}-{s}",
+                image=lambda row, kind=kind, s=s: apply(base(row), kind, s, seed=row))
+
+
+if __name__ == "__main__":
+    main()

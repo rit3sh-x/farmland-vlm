@@ -1,0 +1,15 @@
+% Written by scripts/figures.py from the run records.
+\begin{tikzpicture}
+\begin{axis}[chart, width=0.92\figW, height=0.66\figH, ybar=0pt, bar width=0.200, ymin=0, ymax=1, xtick={0,...,4}, xticklabels={{Is X present?},{Which anomaly?},{How much area?},{Where?},{Mean over types}}, enlarge x limits=0.12, ylabel={Accuracy, held-out fold 0}, legend columns=3, legend style={at={(0.5,1.03)}, anchor=south}]
+\addplot[fill=mbase, draw=none, area legend] coordinates {(0,0.60056) (1,0.054005) (2,0) (3,0.00048426) (4,0.16376)}; \addlegendentry{Zero-shot BLIP}
+\addplot[fill=mblip, draw=none, area legend] coordinates {(0,0.92088) (1,0.59923) (2,0.64455) (3,0.66029) (4,0.70624)}; \addlegendentry{BLIP-LoRA}
+\addplot[fill=mrgb, draw=none, area legend] coordinates {(0,0.81445) (1,0.63636) (2,0.61864) (3,0.62058) (4,0.67251)}; \addlegendentry{Qwen3.5-2B LoRA, RGB}
+\addplot[fill=mndvi, draw=none, area legend] coordinates {(0,0.83115) (1,0.63411) (2,0.59588) (3,0.6155) (4,0.66916)}; \addlegendentry{Qwen3.5-2B LoRA, RGB + NDVI}
+\addlegendimage{legend image code/.code={\draw[figink, line width=1.2pt] (0cm,0cm) -- (0.5cm,0cm);}} \addlegendentry{Always the most common answer}
+\draw[figink, line width=1.2pt] (-0.42,0.5339) -- (0.42,0.5339);
+\draw[figink, line width=1.2pt] (0.5800000000000001,0.2797) -- (1.42,0.2797);
+\draw[figink, line width=1.2pt] (1.58,0.3627) -- (2.42,0.3627);
+\draw[figink, line width=1.2pt] (2.58,0.5898) -- (3.42,0.5898);
+\draw[figink, line width=1.2pt] (3.58,0.4415) -- (4.42,0.4415);
+\end{axis}
+\end{tikzpicture}

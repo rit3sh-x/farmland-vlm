@@ -1,0 +1,14 @@
+% Written by scripts/figures.py from the run records.
+\begin{tikzpicture}
+\begin{groupplot}[chart, group style={group size=3 by 1, horizontal sep=0.035\figW, yticklabels at=edge left}, width=0.28\figW, height=0.68\figH, enlarge x limits=0.12, ymin=0.25, ymax=0.75]
+\nextgroupplot[title={Rank (lr $10^{-4}$, all q,v)}, xtick={0,...,4}, xticklabels={{4},{8},{16},{32},{64}}, ylabel={Validation score}, legend pos=north west, legend style={font=\tiny}]
+\addplot[mblip, line width=1.1pt, mark=*, mark size=1.5pt] coordinates {(0,0.40449) (1,0.41748) (2,0.42536) (3,0.46252) (4,0.50154)}; \addlegendentry{VQA (mean over question types)}
+\addplot[mgold, line width=1.1pt, mark=*, mark size=1.5pt] coordinates {(0,0.3277) (1,0.29392) (2,0.34797) (3,0.47297) (4,0.56757)}; \addlegendentry{Captions (fact F1)}
+\nextgroupplot[title={Learning rate (best rank)}, xtick={0,...,3}, xticklabels={{5e-5},{1e-4},{2e-4},{5e-4}}]
+\addplot[mblip, line width=1.1pt, mark=*, mark size=1.5pt, forget plot] coordinates {(0,0.45501) (1,0.50154) (2,0.56527) (3,0.57433)};
+\addplot[mgold, line width=1.1pt, mark=*, mark size=1.5pt, forget plot] coordinates {(0,0.48986) (1,0.56757) (2,0.66554) (3,0.69257)};
+\nextgroupplot[title={Target modules (best rank, lr)}, xtick={0,...,2}, xticklabels={{text q,v},{all q,v},{all linear}}]
+\addplot[mblip, only marks, mark=*, mark size=2pt, forget plot] coordinates {(0,0.53728) (1,0.57433) (2,0.46225)};
+\addplot[mgold, only marks, mark=*, mark size=2pt, forget plot] coordinates {(0,0.56757) (1,0.69257) (2,0.39527)};
+\end{groupplot}
+\end{tikzpicture}

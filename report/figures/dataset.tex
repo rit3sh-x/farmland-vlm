@@ -1,0 +1,13 @@
+% Written by scripts/figures.py from the run records.
+\begin{tikzpicture}
+\begin{groupplot}[chart, group style={group size=1 by 2, vertical sep=0.13\figW}, width=0.63\figW]
+\nextgroupplot[height=0.4\figH, xbar=0pt, bar width=0.65, y dir=reverse, xmajorgrids, ymajorgrids=false, enlarge y limits={abs=0.6}, ytick={0,...,8}, yticklabels={{drydown},{nutrient deficiency},{weed cluster},{double plant},{endrow},{waterway},{planter skip},{standing water},{storm damage}}, xmin=0, xlabel={Labelled tiles with the class (\%)}]
+\addplot[fill=mblip, draw=none, forget plot] coordinates {(29.75,0) (22.781,1) (18.387,2) (11.357,3) (8.2693,4) (6.0323,5) (5.0413,6) (4.0968,7) (0.59114,8)};
+\nextgroupplot[height=0.3\figH, xmin=0, xmax=100, ymin=0, ymax=6.515, xlabel={Area of a present class (\% of the tile)}, ylabel={Findings (thousands)}]
+\addplot[ybar interval, fill=mblip, draw=white, line width=0.2pt] coordinates {(0,3.998) (1.6667,5.817) (3.3333,4.298) (5,3.783) (6.6667,3.409) (8.3333,3.116) (10,2.71) (11.667,2.638) (13.333,2.374) (15,2.171) (16.667,1.943) (18.333,1.802) (20,1.61) (21.667,1.608) (23.333,1.517) (25,1.385) (26.667,1.335) (28.333,1.276) (30,1.21) (31.667,1.159) (33.333,1.097) (35,1.104) (36.667,1.046) (38.333,0.999) (40,0.954) (41.667,0.932) (43.333,0.964) (45,0.954) (46.667,0.869) (48.333,0.926) (50,0.816) (51.667,0.812) (53.333,0.762) (55,0.754) (56.667,0.712) (58.333,0.707) (60,0.735) (61.667,0.683) (63.333,0.699) (65,0.603) (66.667,0.607) (68.333,0.634) (70,0.604) (71.667,0.569) (73.333,0.603) (75,0.622) (76.667,0.638) (78.333,0.624) (80,0.646) (81.667,0.661) (83.333,0.67) (85,0.702) (86.667,0.721) (88.333,0.723) (90,0.812) (91.667,0.778) (93.333,0.878) (95,0) (96.667,0) (98.333,0) (100,0)};
+\draw[figink, dashed, line width=0.6pt] (10,0) -- (10,6.515);
+\node[rotate=90, anchor=north east, font=\tiny, text=figink] at (10,6.515) {small | moderate};
+\draw[figink, dashed, line width=0.6pt] (35,0) -- (35,6.515);
+\node[rotate=90, anchor=north east, font=\tiny, text=figink] at (35,6.515) {moderate | large};
+\end{groupplot}
+\end{tikzpicture}

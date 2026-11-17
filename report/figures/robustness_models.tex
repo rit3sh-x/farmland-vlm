@@ -1,0 +1,9 @@
+% Written by scripts/figures.py from the run records.
+\begin{tikzpicture}
+\begin{axis}[xmajorgrids, ymajorgrids=false, y dir=reverse, enlarge y limits={abs=0.6}, xtick distance=0.05, xbar=0pt, bar width=0.267, ytick={0,...,7}, yticklabels={{JPEG quality 20},{blur, radius 2},{resolution / 3},{Gaussian noise, sd 15},{unseen question wording},{rotate 90$^\circ$},{brightness and contrast, 25\%},{horizontal flip}}, xlabel={Accuracy change from clean (same 200 tiles)}, legend columns=3, legend style={at={(0.5,1.02)}, anchor=south}, chart, width=0.62\figW, height=0.78\figH]
+\addplot[fill=mblip, draw=none, area legend] coordinates {(-0.13209,0) (-0.077299,1) (-0.076321,2) (-0.050881,3) (-0.032779,4) (-0.013209,5) (-0.0044031,6) (-0.0024462,7)}; \addlegendentry{BLIP-LoRA}
+\addplot[fill=mrgb, draw=none, area legend] coordinates {(-0.039628,0) (-0.044031,1) (-0.021037,2) (-0.028376,3) (-0.069961,4) (-0.018591,5) (-0.023483,6) (-0.012231,7)}; \addlegendentry{Qwen3.5-2B LoRA, RGB}
+\addplot[fill=mndvi, draw=none, area legend] coordinates {(-0.022994,0) (-0.034247,1) (-0.019569,2) (0.0044031,3) (-0.041585,4) (0.008317,5) (-0.018591,6) (0.0097847,7)}; \addlegendentry{Qwen3.5-2B LoRA, RGB + NDVI}
+\draw[figmuted, line width=0.5pt] (0,-0.6) -- (0,7.6);
+\end{axis}
+\end{tikzpicture}

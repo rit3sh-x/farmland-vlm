@@ -1,0 +1,21 @@
+% Written by scripts/figures.py. Needs \usepackage{pgfplots}.
+\usepgfplotslibrary{groupplots}
+\pgfplotsset{compat=1.18}
+\definecolor{figink}{HTML}{1A1A19}
+\definecolor{figmuted}{HTML}{6B6A64}
+\definecolor{figgrid}{HTML}{E4E3DE}
+\definecolor{mbase}{HTML}{9A9992}
+\definecolor{mblip}{HTML}{2A78D6}
+\definecolor{mrgb}{HTML}{EB6834}
+\definecolor{mndvi}{HTML}{1BAF7A}
+\definecolor{mred}{HTML}{E34948}
+\definecolor{mgold}{HTML}{EDA100}
+\pgfplotsset{chart/.style={
+  scale only axis, axis line style={figgrid}, axis x line*=bottom, axis y line*=left, tick style={draw=none},
+  ticklabel style={font=\scriptsize, text=figmuted}, label style={font=\footnotesize}, title style={font=\footnotesize},
+  ymajorgrids, grid style={figgrid, line width=0.4pt}, scaled ticks=false,
+  xticklabel style={/pgf/number format/fixed}, yticklabel style={/pgf/number format/fixed},
+  legend style={draw=none, fill=none, font=\scriptsize, /tikz/every even column/.append style={column sep=8pt}},
+  legend cell align=left}}
+\newlength\figW\newlength\figH
+\newcommand{\fig}[3]{{\setlength\figW{#2}\setlength\figH{#3}\input{figures/#1.tex}}}

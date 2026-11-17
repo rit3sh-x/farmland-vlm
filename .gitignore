@@ -1,0 +1,26 @@
+# Agriculture-Vision terms forbid posting the dataset or its derivatives in code repositories.
+data/
+runs
+work/
+.hubmirror/
+cache/
+*.npz
+*.parquet
+*.safetensors
+*.gguf
+*.pt
+*.pth
+*.ckpt
+*.tar
+*.tar.gz
+report/figures/tiles/
+report/**/*.pdf
+
+node_modules/
+dist/
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+.ipynb_checkpoints/
+.env
